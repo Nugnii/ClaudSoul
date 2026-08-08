@@ -1,0 +1,27 @@
+.DS_Store
+mcp-server/visualization/serve.log
+# Машинные логи сессий — per-machine, не коммитятся (на любом уровне вложенности);
+# корневой modules/ — курируемая документация модулей, трекается (2026-08-07).
+# Порядок обязателен: заякоренный `.claude-docs/*` НЕ покрывает вложенные
+# hooks/.claude-docs и т.п. — их держит `**/`-шаблон; негация корня идёт после.
+**/.claude-docs/
+!/.claude-docs/
+/.claude-docs/*
+!/.claude-docs/modules/
+hooks/tests/.claude-docs/
+
+# Локальные исследовательские артефакты, не для git
+docs/ClaudSoul-vs-top3-memory-systems.pdf
+docs/comparison-memory-systems.html
+
+# Личные данные владельца репозитория — не для публичной раздачи
+# (история git до v1.7.5 ещё содержит эти файлы; для полной очистки
+# из истории — отдельная задача, требует git filter-repo или нового репо)
+SESSION.md
+SESSION-archive*.md
+docs/internal-doc.md
+CLAUDE.md.bak.*
+
+# Артефакты запуска python-скриптов (regen-seed, воркеры бэкфилла)
+__pycache__/
+*.pyc

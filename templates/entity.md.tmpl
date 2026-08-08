@@ -1,0 +1,51 @@
+---
+name: [имя сущности]
+description: [одна строка: что/кто это]
+type: entity
+entity_type: person           # person | company | concept | event | place | work | product
+status: active                # active | archived | merged
+confidence: 1                 # Общий уровень уверенности в существовании сущности (1-5)
+
+# Атрибуты (ключ-значение, каждый со своим confidence и provenance)
+# Пример:
+# attributes:
+#   role:
+#     value: "CEO"
+#     confidence: 3
+#     source_type: document     # self-report | document | third-party | behavioral | cross-reference
+#     sources: [source-id:loc]
+#   skills:
+#     - value: "Python"
+#       level: "junior"
+#       confidence: 3
+#       source_type: behavioral
+#       sources: [chat-YYYY-MM-DD:msgN]
+#       contradiction:
+#         stated_level: "senior"
+#         stated_source: chat-YYYY-MM-DD:msgN
+#         stated_confidence: 1
+attributes: {}
+
+# Траектория (динамика сущности во времени, опционально)
+trajectory: []
+# Пример:
+# trajectory:
+#   - date: YYYY-MM
+#     observation: "короткое наблюдение"
+#     source: source-id
+# inferred_trend: ""
+
+# Temporal
+created: YYYY-MM-DD
+last_updated: YYYY-MM-DD
+first_seen: ""                # Первый источник, где встретилась сущность
+
+# Связи
+relations: []                 # ID relation-*.md, в которых сущность участвует
+edges: []                     # Типизированные связи с case/pattern/principle (similar_to, caused_by, ...)
+domain: []
+tags: []
+---
+
+[Контекст и описание сущности свободной прозой. Не дублировать атрибуты — писать то,
+что не умещается в структурированные поля: нюансы, история, наблюдения.]

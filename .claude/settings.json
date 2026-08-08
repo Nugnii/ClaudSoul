@@ -1,0 +1,36 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(mkdir -p /private/tmp/ct/home3/.claude/projects/-private-tmp-ct-proj)",
+      "Bash(HOME=/private/tmp/ct/home3 bash /private/tmp/ct/mut/hooks/auto-scanner.sh)",
+      "Bash(bash hooks/tests/test_external_correction_gap.sh)",
+      "Bash(cp hooks/external-correction-gap.sh ~/.claude/hooks/external-correction-gap.sh)",
+      "Bash(bash ~/.claude/hooks/external-correction-gap.sh)",
+      "Bash(cp ~/.claude/settings.json ~/.claude/settings.json.backup-aag)",
+      "Bash(jq '.hooks.Stop[0].hooks += [{\"type\":\"command\",\"command\":\"bash ~/.claude/hooks/accepted-alternative-gap.sh\"}]' ~/.claude/settings.json)",
+      "Bash(mv /tmp/settings.new.json ~/.claude/settings.json)",
+      "Bash(cp \"/Users/user/My Project/ClaudSoul/hooks/accepted-alternative-gap.sh\" ~/.claude/hooks/accepted-alternative-gap.sh)",
+      "Bash(cp ~/.claude/settings.json ~/.claude/settings.json.backup-dedup)",
+      "Bash(chmod +x hooks/timestamp-inject.sh hooks/tests/test_timestamp_inject.sh)",
+      "Bash(bash hooks/tests/test_timestamp_inject.sh)",
+      "Bash(cp ~/.claude/settings.json ~/.claude/settings.json.backup-tsi)",
+      "Bash(mv /tmp/s.json ~/.claude/settings.json)",
+      "Bash(cp hooks/timestamp-inject.sh ~/.claude/hooks/)",
+      "Bash(bash ~/.claude/hooks/timestamp-inject.sh)",
+      "Bash(bash hooks/tests/test_rework_detector.sh)",
+      "Bash(cp ~/.claude/settings.json ~/.claude/settings.json.backup-apg)",
+      "Bash(cp hooks/ablation-phase-guard.sh ~/.claude/hooks/)",
+      "Bash(bash hooks/tests/drift-check.sh)",
+      "Bash(bash scripts/count-stats.sh --patch-claude-md)",
+      "Bash(bash scripts/regen-readme-skills.sh)",
+      "Bash(README_FILE=README.ru.md bash scripts/regen-readme-skills.sh)",
+      "Bash(bash hooks/tests/test_project_conformance.sh)",
+      "Bash(cp templates/BACKLOG.md.tmpl ~/.claude/templates/BACKLOG.md.tmpl)",
+      "Bash(cp skills/init-project/SKILL.md ~/.claude/commands/init-project/SKILL.md)",
+      "Bash(bash hooks/tests/test_derived_counts_inventory.sh)"
+    ],
+    "additionalDirectories": [
+      "/Users/user/.claude/hooks"
+    ]
+  }
+}

@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+# test_ablation_phase_guard.sh — фаза видима и защищена: сигнал раз в сессию,
+# стоп на деплой policy, тишина без фазы и на разработку в репозитории.
+
+set -uo pipefail
+
+HOOKS_DIR="$(cd "$(dirname "$0")/.." && pwd)"
+ROOT="$(cd "$HOOKS_DIR/.." && pwd)"
+SCRIPT="$HOOKS_DIR/ablation-phase-guard.sh"
+[ -f "$SCRIPT" ] || { echo "FAIL: $SCRIPT not found"; exit 1; }
+
+PASS=0; FAIL=0
+ok()  { PASS=$((PASS + 1)); }
+bad() { FAIL=$((FAIL + 1)); echo "FAIL [$1]: $2"; }
+assert_contains() {
+    if echo "$1" | grep -Fq -- "$2"; then ok; else bad "$3" "'$2' not in: $1"; fi
+}
+assert_empty() { if [ -z "$1" ]; then ok; else bad "$2" "expected empty: $1"; fi; }
+
+TMP=$(mktemp -d)
+trap 'rm -rf "$TMP"' EXIT
+export ABLATION_DIR="$TMP/abl"
+export STATE_DIR="$TMP/state"
+mkdir -p "$ABLATION_DIR" "$STATE_DIR"
+FAKE_HOME="$TMP/home"
+mkdir -p "$FAKE_HOME"
+
+run_hook() { printf '%s' "$1" | HOME="$FAKE_HOME" STATE_DIR="$STATE_DIR" bash "$SCRIPT" 2>/dev/null; }
+
+# --- T1: фазы нет → тишина на обоих событиях ---
+OUT=$(run_hook '{"session_id":"s1","user_prompt":"привет"}')
+assert_empty "$OUT" "T1: без фазы UserPromptSubmit молчит"
+OUT=$(run_hook '{"session_id":"s1","tool_name":"Bash","tool_input":{"command":"cp x ~/.claude/hooks/"}}')
+assert_empty "$OUT" "T1b: без фазы PreToolUse молчит"
+
+# Фаза активна.
+printf '{"phase":"phase-t","tag":"ablation-phase-t","since":"2026-08-08T18:00:00Z"}' > "$ABLATION_DIR/active-phase.json"
+
+# --- T2: сигнал в сессию, раз на сессию ---
+OUT=$(run_hook '{"session_id":"s2","user_prompt":"привет"}')
+assert_contains "$OUT" "Фаза ablation" "T2: сигнал при активной фазе"
+assert_contains "$OUT" "phase-t" "T2b: имя фазы в сигнале"
+OUT=$(run_hook '{"session_id":"s2","user_prompt":"ещё"}')
+assert_empty "$OUT" "T2c: второй раз в той же сессии молчит"
+OUT=$(run_hook '{"session_id":"s3","user_prompt":"привет"}')
+assert_contains "$OUT" "Фаза ablation" "T2d: новая сессия — свой сигнал"
+
+# --- T3: деплой в установленное — стоп ---
+OUT=$(run_hook "{\"session_id\":\"s4\",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$FAKE_HOME/.claude/hooks/x.sh\"}}")
+assert_contains "$OUT" "СТОП" "T3: Edit установленного хука ловится"
+OUT=$(run_hook "{\"session_id\":\"s4\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"cp hooks/x.sh $FAKE_HOME/.claude/hooks/\"}}")
+assert_contains "$OUT" "СТОП" "T3b: cp в установленные хуки ловится"
+OUT=$(run_hook "{\"session_id\":\"s4\",\"tool_name\":\"Write\",\"tool_input\":{\"file_path\":\"$FAKE_HOME/.claude/settings.json\"}}")
+assert_contains "$OUT" "СТОП" "T3c: Write settings.json ловится"
+OUT=$(run_hook '{"session_id":"s4","tool_name":"Bash","tool_input":{"command":"bash install.sh"}}')
+assert_contains "$OUT" "СТОП" "T3d: install.sh ловится"
+
+# --- T4: разработка в репозитории свободна (§6) ---
+OUT=$(run_hook '{"session_id":"s4","tool_name":"Edit","tool_input":{"file_path":"/repo/hooks/x.sh"}}')
+assert_empty "$OUT" "T4: правка хука в репо — тишина"
+OUT=$(run_hook "{\"session_id\":\"s4\",\"tool_name\":\"Bash\",\"tool_input\":{\"command\":\"bash $FAKE_HOME/.claude/hooks/knowledge-counter-bump.sh p confirmed x\"}}")
+assert_empty "$OUT" "T4b: ЗАПУСК установленного хука — не деплой, тишина"
+
+# --- T5: phase.sh status/close снимает маркер, страж затихает ---
+OUT=$(bash "$ROOT/scripts/ablation/phase.sh" status)
+assert_contains "$OUT" "phase-t" "T5: status видит фазу"
+bash "$ROOT/scripts/ablation/phase.sh" close phase-t >/dev/null
+OUT=$(bash "$ROOT/scripts/ablation/phase.sh" status 2>/dev/null); RC=$?
+[ "$RC" -ne 0 ] && ok || bad "T5b" "status после close не пуст"
+assert_contains "$(cat "$ABLATION_DIR/journal.jsonl")" '"e":"phase_closed"' "T5c: событие закрытия"
+OUT=$(run_hook "{\"session_id\":\"s5\",\"tool_name\":\"Edit\",\"tool_input\":{\"file_path\":\"$FAKE_HOME/.claude/hooks/x.sh\"}}")
+assert_empty "$OUT" "T5d: после закрытия фазы деплой свободен"
+
+# Фаза снова активна — для проверок динамического содержимого сигнала.
+printf '{"phase":"phase-d","tag":"t","since":"2026-08-01T00:00:00Z"}' > "$ABLATION_DIR/active-phase.json"
+
+# --- T6: обязанность регистрации в сигнале, пока регистраций сегодня нет ---
+OUT=$(run_hook '{"session_id":"d1","user_prompt":"привет"}')
+assert_contains "$OUT" "Регистраций сегодня нет" "T6: обязанность регистрации в сигнале"
+printf '{"e":"register","id":"t-x","ts":"%sT10:00:00Z","text":"x","project":"p"}\n' "$(date -u '+%Y-%m-%d')" >> "$ABLATION_DIR/journal.jsonl"
+OUT=$(run_hook '{"session_id":"d2","user_prompt":"привет"}')
+if echo "$OUT" | grep -Fq "Регистраций сегодня нет"; then bad "T6b" "напоминание при живой регистрации"
+else ok; fi
+
+# --- T7: условие остановки — 20 в очереди → сигнал «достигнуто»; status его видит ---
+OUT=$(run_hook '{"session_id":"d3","user_prompt":"привет"}')
+if echo "$OUT" | grep -Fq "ДОСТИГНУТО"; then bad "T7" "стоп-сигнал при 1 регистрации без очереди"
+else ok; fi
+for i in $(seq 1 20); do
+    printf '{"e":"queue","id":"t-%s","ts":"2026-08-02T00:00:0%sZ"}\n' "$i" "0" >> "$ABLATION_DIR/journal.jsonl"
+done
+OUT=$(run_hook '{"session_id":"d4","user_prompt":"привет"}')
+assert_contains "$OUT" "ДОСТИГНУТО" "T7b: очередь 20 — условие остановки в сигнале"
+OUT=$(bash "$ROOT/scripts/ablation/phase.sh" status)
+assert_contains "$OUT" '"stop_condition_met": true' "T7c: status считает условие"
+assert_contains "$OUT" '"queued": 20' "T7d: счёт очереди в status"
+
+echo "test_ablation_phase_guard: $PASS passed, $FAIL failed"
+[ "$FAIL" -eq 0 ]

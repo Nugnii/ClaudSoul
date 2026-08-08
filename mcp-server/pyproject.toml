@@ -1,0 +1,24 @@
+[project]
+name = "claudsoul-mcp"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "fastembed>=0.8.0",
+    # Верхняя граница обязательна: код импортирует `mcp.server.fastmcp`, а в 2.0.0
+    # FastMCP вынесен из пакета. Без границы CI ставил 2.0.0 и падал на сборке тестов
+    # с ModuleNotFoundError, тогда как локальное окружение держало 1.27.0 из uv.lock.
+    "mcp[cli]>=1.27.0,<2",
+    "pyyaml>=6.0.3",
+    "sqlite-vec>=0.1.9",
+    "pymupdf4llm>=0.0.17",
+    "jsonschema>=4.20.0",
+    "markitdown[docx]>=0.1.5",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0.0",
+    "python-docx>=1.2.0",
+]
