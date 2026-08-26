@@ -1,0 +1,92 @@
+---
+name: [short name]
+description: [one-line summary]
+type: case|pattern|principle
+outcome: error|success|communication
+confidence: 1
+impact: 1-5
+intensity: 0                # Surprise factor (0-5): 0=ожидаемо, 5=полная неожиданность
+confirmed_count: 1
+contradicted_count: 0
+last_confirmed: YYYY-MM-DD
+source_cases: []
+status: active
+
+# Контекстные якоря
+domain: []
+situation: ""
+trigger: ""
+stakes: ""
+actors: []
+environment: ""
+circumstances: ""
+purpose: ""
+method: ""
+tags: []
+
+# Demand-компоненты (кому и зачем нужно это знание)
+need: ""                    # Какую потребность решает: avoid_regression, speed_up, reduce_risk...
+urgency: ""                 # Когда применять: immediate, next_session, when_relevant, background
+availability: ""            # Есть ли альтернативы: unique, has_alternatives, common_knowledge
+
+# Реляционные веса (опционально)
+critical_anchors: []        # Якоря, без совпадения которых знание не применять
+weight_modifiers: ""        # Формат: "anchor:value->target:weight" через запятую
+                            # Пример: "method:trained->environment:1,method:untrained->environment:5"
+
+# Связи
+related: []
+edges: []
+
+# Bridge metadata (optional — fill if knowledge relates to inter-layer bridge)
+origin: ""                 # solo | co-cognition | trajectory_pivot
+trigger_for_co_cognition: "" # What triggered co-thinking: analogy, contradiction, question, predictive_miss
+bridge_layer: ""           # Which bridge activated: L2-L3, L4-L7, etc.
+preceded_artifact: ""      # yes | no | n/a — существовало ли знание РАНЬШЕ артефакта,
+                            # который на него ссылается. Не путать с `origin`: тот про то,
+                            # КАК инсайт родился (в одиночку / совместно / из поворота),
+                            # а это про направление причинности. Замер 2026-07-29: 0 из 8
+                            # хуков построены из знания, существовавшего до них.
+
+# Modification lineage (v1.0.8) — только для patterns/principles
+# ПЕРЕКРОЙКИ правила, пишутся руками (/retro, /learn)
+modification_history: []    # Append-only история, элементы:
+                            #   - date: YYYY-MM-DD
+                            #     kind: narrowed|branched|deprecated|reinforced_after_challenge|scope_widened
+                            #     reason: одна строка
+                            #     trigger_case: case-*.md
+# Провенанс подтверждений (v1.18) — пишет knowledge-counter-bump.sh, руками не трогать
+provenance_log: []          # - date / kind: reinforced|contradicted / reason / trigger_case
+fragile: false              # Auto: true при ≥3 записях в modification_history
+                            # (provenance_log в счёт НЕ идёт — подтверждение не перекройка)
+
+# Promotion & scope (v1.0.9) — только для patterns/principles
+promotion_tier: 2           # 1=auto-create, 2=ask, 3=mandatory-ask
+scope: universal            # universal | per-speaker | mixed
+origin_domain: ""           # Домен из которого pattern промоутнут (для domain_factor)
+
+# Per-speaker state (v1.0.9) — только для scope: per-speaker | mixed
+valid_for: []               # speaker_ids где pattern подтверждён
+invalid_for: []             # speaker_ids где pattern противоречил
+pending_for: []             # speaker_ids где видели, но не хватило данных
+per_speaker_state: {}       # Пример: primary: {confidence:3, confirmed_count:5, ..., status:active}
+
+# Adaptive degradation (v1.0.9)
+effective_contradicted: 0.0 # Взвешенный counter (source × domain); weakened≥1.0, deprecated≥2.5
+contradiction_log: []       # Append-only, элементы:
+                            #   - date: YYYY-MM-DD
+                            #     case: case-*.md
+                            #     speaker: primary | anomaly_*
+                            #     contradiction_domain: string
+                            #     weight: 1.04
+                            #     factors: {source: 1.0, domain: 1.2}
+                            #     resulting_action: weaken|narrow|branch|deprecate|none
+---
+
+[Content — rule, observation, or lesson]
+
+**Why:** [What happened that taught us this]
+
+**How to apply:** [When and where this kicks in]
+
+**Limitations:** [When this does NOT apply, whose opinion this is based on]
