@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClaudSoul — Knowledge Universe</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a12;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: #c8c8d0;
+  }
+  canvas#wind { position: absolute; top: 0; left: 0; pointer-events: none; z-index: 0; }
+  svg { display: block; position: relative; z-index: 1; }
+
+  /* Tooltip */
+  #tooltip {
+    position: absolute; pointer-events: none;
+    background: rgba(16, 16, 28, 0.95);
+    border: 1px solid rgba(120, 120, 180, 0.3);
+    border-radius: 8px; padding: 12px 16px;
+    font-size: 13px; line-height: 1.5; max-width: 360px;
+    opacity: 0; transition: opacity 0.15s;
+    backdrop-filter: blur(8px); z-index: 10;
+  }
+  #tooltip.visible { opacity: 1; }
+  #tooltip .tt-name { font-size: 15px; font-weight: 600; margin-bottom: 4px; }
+  #tooltip .tt-type { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.6; }
+  #tooltip .tt-row { margin-top: 6px; }
+  #tooltip .tt-label { opacity: 0.5; font-size: 11px; }
+
+  /* Detail panel */
+  #detail {
+    position: absolute; top: 16px; right: 16px; width: 340px;
+    max-height: calc(100vh - 32px);
+    background: rgba(16, 16, 28, 0.95);
+    border: 1px solid rgba(120, 120, 180, 0.2);
+    border-radius: 12px;
+    font-size: 13px; line-height: 1.6;
+    display: none; backdrop-filter: blur(12px); z-index: 5;
+    overflow: hidden;
+    flex-direction: column;
+  }
+  #detail.visible { display: flex; }
+  #detail-header { padding: 20px 20px 12px; flex-shrink: 0; }
+  #detail-scroll { overflow-y: auto; padding: 0 20px 20px; flex: 1; min-height: 0; }
+  #detail h2 { font-size: 16px; margin-bottom: 8px; }
+  .d-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    border: 1px solid rgba(120, 120, 180, 0.2); border-radius: 6px;
+    overflow: hidden;
+  }
+  .d-cell {
+    display: flex; flex-direction: column; align-items: center;
+    padding: 6px 4px;
+    border-right: 1px solid rgba(120, 120, 180, 0.2);
+  }
+  .d-cell:last-child { border-right: none; }
+  .d-cell-label { font-size: 10px; opacity: 0.45; }
+  .d-cell-val { font-size: 15px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  #detail .d-type { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; opacity: 0.5; margin-bottom: 10px; }
+  .d-summary {
+    font-size: 12px; line-height: 1.5; opacity: 0.65;
+    margin: 10px 0; padding: 8px 10px;
+    border-left: 2px solid rgba(120, 120, 180, 0.25);
+    font-style: italic;
+  }
+  #detail .d-row { margin-bottom: 8px; }
+  #detail .d-label { opacity: 0.5; font-size: 11px; display: block; }
+  #detail .d-tags { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 4px; }
+  #detail .d-tag { background: rgba(120, 120, 200, 0.15); padding: 2px 8px; border-radius: 4px; font-size: 11px; }
+  #detail .d-close { position: absolute; top: 12px; right: 16px; cursor: pointer; opacity: 0.4; font-size: 18px; }
+  #detail .d-close:hover { opacity: 1; }
+  #detail .d-edges { margin-top: 12px; }
+  #detail .d-edge {
+    font-size: 12px; padding: 4px 6px; border-radius: 4px;
+    cursor: pointer; transition: background 0.15s;
+  }
+  #detail .d-edge:hover { background: rgba(120, 120, 200, 0.12); }
+  #detail .d-edge-type { opacity: 0.5; font-size: 10px; }
+  #detail .d-edge-name { color: rgba(160, 170, 220, 0.9); }
+
+  /* Node flash animation */
+  @keyframes nodeFlash {
+    0% { opacity: 0; }
+    30% { opacity: 0.8; }
+    100% { opacity: 0; }
+  }
+  .flash-ring {
+    pointer-events: none;
+    animation: nodeFlash 0.6s ease-out forwards;
+  }
+
+  /* Legend */
+  #legend {
+    position: absolute; bottom: 16px; left: 16px;
+    background: rgba(16, 16, 28, 0.85);
+    border: 1px solid rgba(120, 120, 180, 0.15);
+    border-radius: 8px; padding: 12px 16px;
+    font-size: 11px; line-height: 2; backdrop-filter: blur(8px); z-index: 3;
+  }
+  #legend .legend-title { font-size: 12px; font-weight: 600; margin-bottom: 4px; }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-circle { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
+
+  /* Stats */
+  #stats { position: absolute; top: 16px; left: 16px; font-size: 12px; opacity: 0.4; z-index: 3; }
+
+  /* Settings panel */
+  #settings {
+    position: absolute; bottom: 16px; right: 16px;
+    background: rgba(16, 16, 28, 0.92);
+    border: 1px solid rgba(120, 120, 180, 0.2);
+    border-radius: 10px; padding: 16px 20px;
+    font-size: 12px; backdrop-filter: blur(10px); z-index: 5;
+    min-width: 240px;
+  }
+  #settings .s-title {
+    font-size: 12px; font-weight: 600; margin-bottom: 10px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  #settings .s-toggle { cursor: pointer; opacity: 0.5; font-size: 14px; }
+  #settings .s-toggle:hover { opacity: 1; }
+  #settings .s-body { display: block; }
+  #settings .s-body.collapsed { display: none; }
+  .s-row { margin-bottom: 10px; }
+  .s-row label { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; opacity: 0.7; font-size: 11px; }
+  .s-row label span.s-val { opacity: 0.5; font-variant-numeric: tabular-nums; }
+  .s-row input[type="range"] {
+    width: 100%; height: 3px; -webkit-appearance: none; appearance: none;
+    background: rgba(120, 120, 180, 0.2); border-radius: 2px; outline: none;
+  }
+  .s-row input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 12px; height: 12px;
+    background: rgba(150, 150, 220, 0.8); border-radius: 50%; cursor: pointer;
+  }
+</style>
+</head>
+<body>
+<canvas id="wind"></canvas>
+<svg id="graph"></svg>
+<div id="tooltip"></div>
+<div id="detail">
+  <span class="d-close" onclick="closeDetail()">&times;</span>
+  <div id="detail-header"></div>
+  <div id="detail-scroll"></div>
+</div>
+<div id="legend">
+  <div class="legend-title">Вселенная знаний</div>
+  <div class="legend-item"><span class="legend-circle" style="background:hsl(42,82%,66%); box-shadow:0 0 8px hsl(42,82%,66%)"></span> принцип (звезда)</div>
+  <div class="legend-item"><span class="legend-circle" style="background:hsl(190,68%,58%)"></span> паттерн</div>
+  <div class="legend-item"><span class="legend-circle" style="background:hsl(260,55%,66%)"></span> кейс (планета)</div>
+  <div class="legend-item" style="margin-top: 8px; opacity: 0.6;">Яркость = масса (уверенность × влияние)</div>
+  <div class="legend-item" style="opacity: 0.6;">Ободок узла = область знания</div>
+  <div class="legend-item" style="opacity: 0.6;">Свечение = состояние (активно / ослаблено / устарело)</div>
+  <div class="legend-item" style="opacity: 0.6;">Толщина ребра = надёжность</div>
+  <div class="legend-item" style="opacity: 0.6;">Градиент ребра = цвет узла А → цвет узла Б</div>
+</div>
+<div id="stats"></div>
+
+<div id="settings">
+  <div class="s-title">
+    Настройки
+    <span class="s-toggle" onclick="toggleSettings()">_</span>
+  </div>
+  <div class="s-body" id="settings-body">
+    <div class="s-row">
+      <label>Разброс <span class="s-val" id="v-spread">50</span></label>
+      <input type="range" id="r-spread" min="5" max="100" value="50">
+    </div>
+    <div class="s-row">
+      <label>Отталкивание <span class="s-val" id="v-repel">50</span></label>
+      <input type="range" id="r-repel" min="5" max="100" value="50">
+    </div>
+    <div class="s-row">
+      <label>Притяжение кластеров <span class="s-val" id="v-cluster">30</span></label>
+      <input type="range" id="r-cluster" min="0" max="100" value="30">
+    </div>
+    <div class="s-row">
+      <label>Толщина рёбер <span class="s-val" id="v-edge">50</span></label>
+      <input type="range" id="r-edge" min="5" max="100" value="50">
+    </div>
+    <div class="s-row">
+      <label>Размер узлов <span class="s-val" id="v-size">50</span></label>
+      <input type="range" id="r-size" min="10" max="100" value="50">
+    </div>
+    <div class="s-row">
+      <label>Свечение <span class="s-val" id="v-glow">50</span></label>
+      <input type="range" id="r-glow" min="0" max="100" value="50">
+    </div>
+    <div class="s-row">
+      <label>Сила притяжения <span class="s-val" id="v-gravity">30</span></label>
+      <input type="range" id="r-gravity" min="1" max="100" value="30">
+    </div>
+    <div class="s-row">
+      <label>Космический ветер <span class="s-val" id="v-wind">40</span></label>
+      <input type="range" id="r-wind" min="0" max="100" value="40">
+    </div>
+  </div>
+</div>
+
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+// === SETTINGS STATE ===
+const cfg = {
+  spread: 50, repel: 50, cluster: 30,
+  edgeThick: 50, nodeSize: 50, glow: 50, wind: 40,
+};
+
+// === PERSIST SETTINGS (localStorage) ===
+const SETTINGS_KEY = 'claudsoul.graph2d.settings.v1';
+const SETTINGS_SLIDERS = {
+  'r-spread': 'spread', 'r-repel': 'repel', 'r-cluster': 'cluster',
+  'r-edge': 'edgeThick', 'r-size': 'nodeSize', 'r-glow': 'glow',
+  'r-gravity': 'gravity', 'r-wind': 'wind'
+};
+function loadSettings() {
+  try {
+    const raw = localStorage.getItem(SETTINGS_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw) || {};
+    for (const [id, key] of Object.entries(SETTINGS_SLIDERS)) {
+      const v = saved[key];
+      if (v == null) continue;
+      const slider = document.getElementById(id);
+      if (!slider) continue;
+      slider.value = v;
+      cfg[key] = +v;
+      const valEl = document.getElementById('v-' + id.slice(2));
+      if (valEl) valEl.textContent = v;
+    }
+  } catch (_) {}
+}
+function saveSettings() {
+  const out = {};
+  for (const key of Object.values(SETTINGS_SLIDERS)) {
+    if (cfg[key] != null) out[key] = cfg[key];
+  }
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(out)); } catch (_) {}
+}
+loadSettings();
+
+function toggleSettings() {
+  const body = document.getElementById('settings-body');
+  const toggle = document.querySelector('.s-toggle');
+  body.classList.toggle('collapsed');
+  toggle.textContent = body.classList.contains('collapsed') ? '+' : '_';
+}
+
+// === COSMIC WIND (Canvas particle system) ===
+const windCanvas = document.getElementById('wind');
+const wCtx = windCanvas.getContext('2d');
+let particles = [];
+const PARTICLE_COUNT = 600;
+
+function initWind() {
+  windCanvas.width = window.innerWidth;
+  windCanvas.height = window.innerHeight;
+  particles = [];
+  for (let i = 0; i < PARTICLE_COUNT; i++) {
+    particles.push(makeParticle());
+  }
+}
+
+function makeParticle(fromLeft) {
+  const w = windCanvas.width;
+  const h = windCanvas.height;
+  return {
+    x: fromLeft ? -10 : Math.random() * w,
+    y: Math.random() * h,
+    vx: 0.2 + Math.random() * 0.8,
+    vy: (Math.random() - 0.5) * 0.3,
+    size: 0.3 + Math.random() * 1.2,
+    alpha: 0.03 + Math.random() * 0.12,
+    life: Math.random(),
+    hue: 220 + Math.random() * 40,
+  };
+}
+
+function animateWind() {
+  const w = windCanvas.width;
+  const h = windCanvas.height;
+  const windStrength = cfg.wind / 100;
+
+  wCtx.clearRect(0, 0, w, h);
+
+  if (windStrength < 0.01) {
+    requestAnimationFrame(animateWind);
+    return;
+  }
+
+  for (let i = 0; i < particles.length; i++) {
+    const p = particles[i];
+    // Move
+    p.x += p.vx * windStrength * 2.5;
+    p.y += p.vy * windStrength;
+    p.y += Math.sin(p.x * 0.005 + p.life * 10) * 0.15 * windStrength;
+
+    // Wrap around
+    if (p.x > w + 10) {
+      particles[i] = makeParticle(true);
+      continue;
+    }
+    if (p.y < -10) p.y = h + 10;
+    if (p.y > h + 10) p.y = -10;
+
+    // Draw
+    const a = p.alpha * windStrength * 2;
+    wCtx.beginPath();
+    // Streak
+    const streakLen = p.size * 3 * windStrength + 1;
+    wCtx.moveTo(p.x, p.y);
+    wCtx.lineTo(p.x - streakLen, p.y - p.vy * 2);
+    wCtx.strokeStyle = `hsla(${p.hue}, 40%, 75%, ${a})`;
+    wCtx.lineWidth = p.size * 0.5;
+    wCtx.stroke();
+
+    // Bright head
+    wCtx.beginPath();
+    wCtx.arc(p.x, p.y, p.size * 0.4, 0, Math.PI * 2);
+    wCtx.fillStyle = `hsla(${p.hue}, 30%, 85%, ${a * 1.5})`;
+    wCtx.fill();
+  }
+
+  requestAnimationFrame(animateWind);
+}
+
+initWind();
+animateWind();
+window.addEventListener('resize', initWind);
+
+// === PALETTE ===
+// Primary hue by node type; lightness grows with mass; domain = outline accent
+// from a secondary palette (explicitly avoiding type hues amber/teal/violet).
+const typePalette = {
+  principle: { h: 42,  s: 82 },   // amber / gold
+  pattern:   { h: 190, s: 68 },   // teal / cyan
+  case:      { h: 260, s: 55 },   // lavender / violet
+  unknown:   { h: 220, s: 12 },   // neutral
+};
+
+function nodeColor(n, maxMass) {
+  const t = typePalette[n.type] || typePalette.unknown;
+  const m = Math.min(1, (n.mass || 1) / Math.max(maxMass, 1));
+  const l = 52 + m * 22;          // 52..74
+  return `hsl(${t.h}, ${t.s}%, ${l}%)`;
+}
+
+function nodeGlowAlpha(n, maxMass) {
+  const m = Math.min(1, (n.mass || 1) / Math.max(maxMass, 1));
+  return 0.22 + m * 0.55;         // 0.22..0.77
+}
+
+// Status → glow intensity multiplier (no hue change, just brightness).
+const stateGlowMult = {
+  active: 1.0, branched: 0.75, weakened: 0.45, deprecated: 0.15,
+};
+function nodeStateMult(n) {
+  return stateGlowMult[n.status] ?? 1.0;
+}
+
+// Domain accent — secondary palette, picked to not collide with type hues.
+const domainAccentPalette = [
+  '#4ade80', '#f87171', '#ec4899', '#84cc16', '#f43f5e',
+  '#d946ef', '#a3e635', '#fb923c', '#e11d48', '#65a30d',
+];
+function hashStr(s) {
+  let h = 2166136261;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619) >>> 0;
+  }
+  return h;
+}
+function domainAccent(n) {
+  const d = (n.domain || '').split(',')[0].trim();
+  if (!d) return null;
+  return domainAccentPalette[hashStr(d) % domainAccentPalette.length];
+}
+
+function nodeRadius(d) {
+  const scale = cfg.nodeSize / 50;
+  const base = ({ principle: 14, pattern: 9, case: 5 }[d.type] || 5) * scale;
+  const massBonus = Math.sqrt(d.mass) * 0.8 * scale;
+  return base + massBonus;
+}
+
+// === LOAD DATA AND RENDER ===
+d3.json('graph-data.json').then(data => {
+  if (!data || !data.nodes || !data.nodes.length) {
+    document.getElementById('stats').textContent = 'Нет данных. Запустите open_graph из Claude Code.';
+    return;
+  }
+
+  const { nodes, edges, domains } = data;
+  const maxMass = d3.max(nodes, d => d.mass) || 1;
+
+  nodes.forEach(n => {
+    n.color = nodeColor(n, maxMass);
+    n.radius = nodeRadius(n);
+    n.glowAlpha = nodeGlowAlpha(n, maxMass);
+    n.stateMult = nodeStateMult(n);
+    n.domainColor = domainAccent(n);
+  });
+
+  // Domain Russian labels
+  const domainRuLabel = {};
+  if (domains) {
+    domains.forEach(d => {
+      const aliases = d.aliases || [];
+      const ruAlias = aliases.find(a => /[а-яё]/i.test(a)) || aliases[0] || d.name;
+      domainRuLabel[d.name] = ruAlias;
+      domainRuLabel[d.name.replace(/_/g, '-')] = ruAlias;
+      domainRuLabel[d.name.replace(/-/g, '_')] = ruAlias;
+    });
+  }
+  function domainLabel(name) {
+    return domainRuLabel[name] || domainRuLabel[name.replace(/-/g, '_')] || name;
+  }
+
+  // Domain clusters
+  const domainClusters = {};
+  nodes.forEach(n => {
+    const pd = (n.domain || '').split(',')[0].trim();
+    if (pd) {
+      if (!domainClusters[pd]) domainClusters[pd] = [];
+      domainClusters[pd].push(n);
+    }
+  });
+
+  const clusterNames = Object.keys(domainClusters);
+  const clusterCenters = {};
+  const cx = window.innerWidth / 2, cy = window.innerHeight / 2;
+
+  function recalcClusters() {
+    const r = Math.min(cx, cy) * 0.4 * (cfg.spread / 50 + 0.5);
+    clusterNames.forEach((name, i) => {
+      const angle = (2 * Math.PI * i) / clusterNames.length;
+      clusterCenters[name] = { x: cx + r * Math.cos(angle), y: cy + r * Math.sin(angle) };
+    });
+  }
+  recalcClusters();
+
+  // SVG
+  const width = window.innerWidth, height = window.innerHeight;
+  const svg = d3.select('#graph').attr('width', width).attr('height', height);
+  const defs = svg.append('defs');
+
+  // Glow filters
+  const glowFilter = defs.append('filter').attr('id', 'glow');
+  glowFilter.append('feGaussianBlur').attr('id', 'glow-blur').attr('stdDeviation', '4').attr('result', 'blur');
+  const fm = glowFilter.append('feMerge');
+  fm.append('feMergeNode').attr('in', 'blur');
+  fm.append('feMergeNode').attr('in', 'SourceGraphic');
+
+  const starGlow = defs.append('filter').attr('id', 'starGlow')
+    .attr('x', '-100%').attr('y', '-100%').attr('width', '300%').attr('height', '300%');
+  starGlow.append('feGaussianBlur').attr('id', 'star-blur').attr('stdDeviation', '8').attr('result', 'blur');
+  const sm = starGlow.append('feMerge');
+  sm.append('feMergeNode').attr('in', 'blur');
+  sm.append('feMergeNode').attr('in', 'blur');
+  sm.append('feMergeNode').attr('in', 'SourceGraphic');
+
+  // Edge gradients
+  edges.forEach((e, i) => {
+    e.gradientId = `eg-${i}`;
+    const g = defs.append('linearGradient').attr('id', e.gradientId).attr('gradientUnits', 'userSpaceOnUse');
+    g.append('stop').attr('offset', '0%').attr('class', 'grad-start');
+    g.append('stop').attr('offset', '100%').attr('class', 'grad-end');
+  });
+
+  const container = svg.append('g');
+
+  // Decorative stars
+  const starField = container.append('g');
+  for (let i = 0; i < 300; i++) {
+    starField.append('circle')
+      .attr('cx', Math.random() * width * 3 - width)
+      .attr('cy', Math.random() * height * 3 - height)
+      .attr('r', Math.random() * 1.2)
+      .attr('fill', `rgba(200,200,255,${0.08 + Math.random() * 0.2})`);
+  }
+
+  // Domain labels
+  const domainLabelEls = container.append('g');
+  const dlTexts = {};
+  clusterNames.forEach(name => {
+    const c = clusterCenters[name];
+    dlTexts[name] = domainLabelEls.append('text')
+      .attr('x', c.x).attr('y', c.y)
+      .attr('text-anchor', 'middle')
+      .attr('fill', 'rgba(150,150,200,0.15)')
+      .attr('font-size', '16px').attr('font-weight', '300')
+      .text(domainLabel(name));
+  });
+
+  // Edges
+  const edgeGroup = container.append('g');
+  const edgeEls = edgeGroup.selectAll('line').data(edges).join('line')
+    .attr('stroke', d => `url(#${d.gradientId})`)
+    .attr('stroke-width', 1.5)
+    .attr('stroke-opacity', 0.5);
+
+  // Nodes
+  const nodeGroup = container.append('g');
+  const nodeEls = nodeGroup.selectAll('g').data(nodes).join('g')
+    .attr('cursor', 'pointer')
+    .call(d3.drag().on('start', ds).on('drag', dd).on('end', de));
+
+  // Outer glow
+  const glowCircles = nodeEls.append('circle')
+    .attr('r', d => d.radius * 2)
+    .attr('fill', d => d.color)
+    .attr('opacity', d => d.glowAlpha * 0.3 * d.stateMult)
+    .attr('filter', d => d.type === 'principle' ? 'url(#starGlow)' : 'url(#glow)');
+
+  // Main circle — fill by type+mass, stroke = domain accent
+  const mainCircles = nodeEls.append('circle')
+    .attr('r', d => d.radius)
+    .attr('fill', d => d.color)
+    .attr('stroke', d => d.domainColor || 'rgba(200,200,220,0.25)')
+    .attr('stroke-width', d => d.type === 'principle' ? 2.2 : 1.6)
+    .attr('stroke-opacity', 0.85);
+
+  // Star core
+  const coreCircles = nodeEls.filter(d => d.type === 'principle').append('circle')
+    .attr('r', d => d.radius * 0.4)
+    .attr('fill', 'rgba(255,255,255,0.6)');
+
+  // Labels
+  nodeEls.filter(d => d.type === 'principle' || d.mass >= maxMass * 0.5)
+    .append('text')
+    .attr('class', 'node-label')
+    .attr('dy', d => d.radius + 14)
+    .attr('text-anchor', 'middle')
+    .attr('fill', 'rgba(200,200,220,0.7)')
+    .attr('font-size', '10px')
+    .text(d => d.name && d.name.length > 30 ? d.name.slice(0, 28) + '...' : d.name);
+
+  // Force simulation
+  let clusterStrength = cfg.cluster / 1000;
+
+  const simulation = d3.forceSimulation(nodes)
+    .force('charge', d3.forceManyBody().strength(d => -(60 + d.radius * 5) * (cfg.repel / 50)))
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(100 * cfg.spread / 50).strength(0.08))
+    .force('collision', d3.forceCollide().radius(d => d.radius + 8))
+    .force('cluster', alpha => {
+      nodes.forEach(n => {
+        const pd = (n.domain || '').split(',')[0].trim();
+        const c = clusterCenters[pd];
+        if (c) {
+          const k = clusterStrength * alpha;
+          n.vx += (c.x - n.x) * k;
+          n.vy += (c.y - n.y) * k;
+        }
+      });
+    })
+    .force('center', d3.forceCenter(cx, cy).strength(0.005))
+    .alphaDecay(0.008)
+    .on('tick', ticked);
+
+  function ticked() {
+    edgeEls.attr('x1', d => d.source.x).attr('y1', d => d.source.y)
+           .attr('x2', d => d.target.x).attr('y2', d => d.target.y);
+
+    edges.forEach((e, i) => {
+      const g = d3.select(`#eg-${i}`);
+      g.attr('x1', e.source.x).attr('y1', e.source.y).attr('x2', e.target.x).attr('y2', e.target.y);
+      g.select('.grad-start').attr('stop-color', e.source.color);
+      g.select('.grad-end').attr('stop-color', e.target.color);
+    });
+
+    const thickScale = cfg.edgeThick / 50;
+    edgeEls.attr('stroke-width', d => {
+      const avgRel = (Math.abs(d.source.reliability || 0) + Math.abs(d.target.reliability || 0)) / 2;
+      return Math.max(0.3, (0.5 + avgRel * 0.8) * thickScale);
+    });
+
+    nodeEls.attr('transform', d => `translate(${d.x},${d.y})`);
+  }
+
+  // Drag
+  function ds(ev, d) { if (!ev.active) simulation.alphaTarget(0.3).restart(); d.fx = d.x; d.fy = d.y; }
+  function dd(ev, d) { d.fx = ev.x; d.fy = ev.y; }
+  function de(ev, d) { if (!ev.active) simulation.alphaTarget(0); d.fx = null; d.fy = null; }
+
+  // Zoom
+  svg.call(d3.zoom().scaleExtent([0.1, 8]).on('zoom', ev => container.attr('transform', ev.transform)));
+
+  // Tooltip
+  const tooltip = d3.select('#tooltip');
+  nodeEls
+    .on('mouseover', (ev, d) => {
+      tooltip.classed('visible', true);
+      const rs = d.reliability >= 0 ? `+${d.reliability}` : `${d.reliability}`;
+      tooltip.html(`
+        <div class="tt-name" style="color:${d.color}">${d.name}</div>
+        <div class="tt-type">${d.type}</div>
+        <div class="tt-row"><span class="tt-label">уверенность:</span> ${d.confidence} &nbsp; <span class="tt-label">влияние:</span> ${d.impact} &nbsp; <span class="tt-label">масса:</span> ${d.mass}</div>
+        <div class="tt-row"><span class="tt-label">надёжность:</span> ${rs} &nbsp; (${d.confirmed_count} подтв., ${d.contradicted_count} опроверг.)</div>
+        <div class="tt-row"><span class="tt-label">домен:</span> ${d.domain ? d.domain.split(',').map(s => domainLabel(s.trim())).join(', ') : '—'}</div>
+      `);
+    })
+    .on('mousemove', ev => { tooltip.style('left', (ev.pageX + 16) + 'px').style('top', (ev.pageY - 10) + 'px'); })
+    .on('mouseout', () => tooltip.classed('visible', false));
+
+  // Click detail
+  nodeEls.on('click', (ev, d) => { ev.stopPropagation(); showDetail(d); });
+  svg.on('click', closeDetail);
+
+  // Flash a node on the graph
+  function flashNode(targetId) {
+    const targetNode = nodes.find(n => n.id === targetId);
+    if (!targetNode) return;
+    const ring = nodeGroup.append('circle')
+      .attr('class', 'flash-ring')
+      .attr('cx', targetNode.x).attr('cy', targetNode.y)
+      .attr('r', targetNode.radius * 3)
+      .attr('fill', 'none')
+      .attr('stroke', targetNode.color)
+      .attr('stroke-width', 2);
+    ring.transition().duration(600).attr('r', targetNode.radius * 5).style('opacity', 0).remove();
+  }
+
+  function showDetail(d) {
+    const rs = d.reliability >= 0 ? `+${d.reliability}` : `${d.reliability}`;
+    const connected = edges.filter(e => (e.source.id || e.source) === d.id || (e.target.id || e.target) === d.id);
+
+    // Fixed header
+    d3.select('#detail-header').html(`
+      <h2 style="color:${d.color}">${d.name}</h2>
+      <div class="d-type">${d.type} &middot; ${d.status}</div>
+      <div class="d-grid">
+        <div class="d-cell"><span class="d-cell-label">уверенность</span><span class="d-cell-val">${d.confidence}</span></div>
+        <div class="d-cell"><span class="d-cell-label">влияние</span><span class="d-cell-val">${d.impact}</span></div>
+        <div class="d-cell"><span class="d-cell-label">масса</span><span class="d-cell-val">${d.mass}</span></div>
+      </div>
+      <div class="d-grid" style="margin-top:-1px">
+        <div class="d-cell"><span class="d-cell-label">надёжность</span><span class="d-cell-val">${rs}</span></div>
+        <div class="d-cell"><span class="d-cell-label">подтв.</span><span class="d-cell-val">${d.confirmed_count}</span></div>
+        <div class="d-cell"><span class="d-cell-label">опроверг.</span><span class="d-cell-val">${d.contradicted_count}</span></div>
+      </div>
+      ${d.summary ? `<div class="d-summary">${d.summary}</div>` : ''}
+      <div class="d-row" style="margin-top:10px"><span class="d-label">домен:</span> ${d.domain ? d.domain.split(',').map(s => domainLabel(s.trim())).join(', ') : '—'}</div>
+    `);
+
+    // Scrollable body: tags + edges
+    let tagsHtml = '';
+    if (d.tags) {
+      const tl = d.tags.split(',').map(t => t.trim()).filter(Boolean);
+      if (tl.length) tagsHtml = '<div class="d-row"><span class="d-label">теги:</span><div class="d-tags">' + tl.map(t => `<span class="d-tag">${t}</span>`).join('') + '</div></div>';
+    }
+
+    // Group edges by target node, collect edge types
+    const edgeTypeRu = {
+      related: 'связано', caused_by: 'вызвано', similar_to: 'похоже на',
+      contradicts: 'противоречит', led_to: 'привело к', specializes: 'уточняет',
+      generalizes: 'обобщает', source_case: 'источник',
+    };
+    let edgesHtml = '';
+    if (connected.length) {
+      const grouped = {};
+      connected.forEach(e => {
+        const other = (e.source.id || e.source) === d.id ? e.target : e.source;
+        const otherId = other.id || other;
+        if (!grouped[otherId]) grouped[otherId] = { node: other, types: [] };
+        grouped[otherId].types.push(e.type);
+      });
+      const uniqueCount = Object.keys(grouped).length;
+      edgesHtml = '<div class="d-edges"><span class="d-label">связи (' + uniqueCount + '):</span>';
+      Object.values(grouped).forEach(g => {
+        const otherId = g.node.id || g.node;
+        const otherName = g.node.name || '#' + otherId;
+        const typesStr = g.types.map(t => edgeTypeRu[t] || t).join(', ');
+        edgesHtml += `<div class="d-edge" data-node-id="${otherId}"><span class="d-edge-name">${otherName}</span> <span class="d-edge-type">(${typesStr})</span></div>`;
+      });
+      edgesHtml += '</div>';
+    }
+
+    const scrollEl = d3.select('#detail-scroll');
+    scrollEl.html(tagsHtml + edgesHtml);
+    scrollEl.node().scrollTop = 0;
+
+    // Bind hover → flash + click → navigate
+    scrollEl.selectAll('.d-edge').on('mouseenter', function() {
+      const targetId = +this.dataset.nodeId;
+      flashNode(targetId);
+    }).on('click', function(ev) {
+      ev.stopPropagation();
+      const targetId = +this.dataset.nodeId;
+      const targetNode = nodes.find(n => n.id === targetId);
+      if (targetNode) {
+        flashNode(targetId);
+        showDetail(targetNode);
+      }
+    });
+
+    d3.select('#detail').classed('visible', true);
+  }
+
+  // Stats
+  d3.select('#stats').text(`${nodes.length} узлов \u00b7 ${edges.length} связей \u00b7 ${clusterNames.length} кластеров`);
+
+  // === SETTINGS HANDLERS ===
+  function bindSlider(id, key, onChange) {
+    const slider = document.getElementById('r-' + id);
+    const valEl = document.getElementById('v-' + id);
+    slider.addEventListener('input', () => {
+      cfg[key] = +slider.value;
+      valEl.textContent = slider.value;
+      onChange(+slider.value);
+      saveSettings();
+    });
+  }
+
+  bindSlider('spread', 'spread', v => {
+    recalcClusters();
+    simulation.force('link').distance(100 * v / 50);
+    // Update domain labels positions
+    clusterNames.forEach(name => {
+      const c = clusterCenters[name];
+      if (dlTexts[name]) dlTexts[name].attr('x', c.x).attr('y', c.y);
+    });
+    simulation.alpha(0.5).restart();
+  });
+
+  bindSlider('repel', 'repel', v => {
+    simulation.force('charge').strength(d => -(60 + d.radius * 5) * (v / 50));
+    simulation.alpha(0.5).restart();
+  });
+
+  bindSlider('cluster', 'cluster', v => {
+    clusterStrength = v / 1000;
+    simulation.alpha(0.5).restart();
+  });
+
+  bindSlider('edge', 'edgeThick', () => {
+    // Applied in ticked()
+  });
+
+  bindSlider('size', 'nodeSize', v => {
+    nodes.forEach(n => { n.radius = nodeRadius(n); });
+    mainCircles.attr('r', d => d.radius);
+    glowCircles.attr('r', d => d.radius * 2);
+    coreCircles.attr('r', d => d.radius * 0.4);
+    nodeEls.selectAll('.node-label').attr('dy', d => d.radius + 14);
+    simulation.force('collision').radius(d => d.radius + 8);
+    simulation.alpha(0.3).restart();
+  });
+
+  bindSlider('glow', 'glow', v => {
+    const scale = v / 50;
+    d3.select('#glow-blur').attr('stdDeviation', 4 * scale);
+    d3.select('#star-blur').attr('stdDeviation', 8 * scale);
+    glowCircles.attr('opacity', d => d.glowAlpha * 0.3 * scale * d.stateMult);
+  });
+
+  bindSlider('gravity', 'gravity', v => {
+    simulation.force('link').strength(0.02 + v / 500);
+    simulation.force('center').strength(0.001 + v / 5000);
+    simulation.alpha(0.5).restart();
+  });
+
+  bindSlider('wind', 'wind', () => {
+    // Applied in animateWind()
+  });
+
+  // Apply any restored (non-default) slider values by firing their handlers once.
+  for (const id of Object.keys(SETTINGS_SLIDERS)) {
+    const el = document.getElementById(id);
+    if (el) el.dispatchEvent(new Event('input'));
+  }
+
+}).catch(err => {
+  document.getElementById('stats').textContent = `Ошибка загрузки: ${err.message}`;
+  console.error(err);
+});
+
+function closeDetail() { d3.select('#detail').classed('visible', false); }
+</script>
+</body>
+</html>

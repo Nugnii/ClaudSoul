@@ -1,0 +1,34 @@
+{
+  "name": "claudsoul",
+  "version": "0.0.4",
+  "description": "Self-learning system for Claude Code: cognitive layers, knowledge base, hooks. Placeholder release — full installer in development.",
+  "keywords": [
+    "claude-code",
+    "self-learning",
+    "knowledge-base",
+    "cognitive-architecture",
+    "hooks",
+    "agent-skills"
+  ],
+  "homepage": "https://github.com/Nugnii/ClaudSoul",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Nugnii/ClaudSoul.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Nugnii/ClaudSoul/issues"
+  },
+  "license": "MIT",
+  "author": "Kanstantsin Berseneu",
+  "bin": {
+    "claudsoul": "bin/claudsoul.js"
+  },
+  "files": [
+    "bin",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=14"
+  }
+}

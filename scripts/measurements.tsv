@@ -1,0 +1,59 @@
+# Реестр замеров. Каждая строка: id <TAB> период_в_днях <TAB> команда <TAB> что меряет
+#
+# Правило: у ЛЮБОГО замера есть срок. Замер без срока держится на том, что кто-то о нём
+# вспомнит — а это не механизм. Повод конкретный: 2026-07-29 собеседник спросил, становятся
+# ли знания инструментом. Замер был сделан и дал 1,4%. Но сделан он был потому, что спросили;
+# без вопроса не случился бы вовсе, и никто бы этого не заметил — у измерения не было ни
+# владельца, ни срока.
+#
+# Просроченный замер поднимается сам: `measurement-due.sh` запускает его и кладёт результат
+# рядом, а недельный дайджест сообщает о просрочке. Пустой период (0) означает «по событию,
+# не по календарю» — такие строки в просрочку не попадают, но перечислены, чтобы список
+# замеров был полным и было видно, что именно меряется по событию.
+#
+# Оговорка к периоду 0, найденная развёрткой D38: `measurement-due.sh:46-49` делает
+# `continue` ДО сравнения возраста, то есть период 0 — буквальное освобождение от проверки.
+# Для трёх строк ниже это значило: владелец назван (launchd), а что он сработал — не
+# проверяет ничто. Закрыто отдельной строкой `launchd-freshness`, которая смотрит на сами
+# задания и на свежесть их артефактов. Освобождение от календаря не равно освобождению
+# от проверки — если появится новая строка с периодом 0, у неё должен быть свой сторож.
+#
+# id	дней	команда	что меряет
+knowledge-instrument	7	scripts/knowledge-instrument-audit.sh	какая доля базы знаний способна дойти до действия, а не только до контекста
+backlog-recheck	7	scripts/backlog-recheck.sh	остались ли закрытые пункты долга закрытыми
+seed-drift	7	python3 scripts/regen-seed.py --check	не разошёлся ли seed с рабочей базой
+suite-linux	30	scripts/measure-linux-parity.sh	проходит ли набор тестов на машине без установленного ClaudSoul
+launchd-freshness	1	scripts/launchd-freshness.sh	живы ли задания по расписанию и обновляются ли их артефакты
+intrusiveness	0	hooks/metrics-collector.sh	вмешательства, пороги, условия возврата долга — по расписанию launchd (com.claudsoul.scanner через auto-scanner, раз в 4 ч) и по вызову /knowledge-audit
+knowledge-audit	0	hooks/knowledge-audit-digest.sh	просрочка знаний и эскалация — по расписанию launchd, еженедельно
+bridge-health	0	hooks/bridge-health-digest.sh	состояние межслойных мостов — по расписанию launchd, ежемесячно
+backlog-archive	7	scripts/backlog-archive.sh run	выполненное уезжает в архив (не отчёт, а сама уборка)
+skill-contract	7	hooks/skill-review-check.sh sweep	соблюдают ли контракт ВСЕ скиллы, а не только тронутые коммитом
+state-size	7	scripts/state-size.sh	не копится ли что-то в каталоге состояния без уборки
+escalation-age	7	scripts/escalation-age.sh	сколько недель заявке на эскалацию, по которой не действуют
+second-contour	30	scripts/second-contour-freshness.sh	не устарел ли второй контур: entity/fact/relation вне FSRS по конструкции
+calibration	30	python3 scripts/calibrate.py --history ~/.claude/hooks/state/intrusiveness-backfill-digest.jsonl --output /tmp/calibration.md	разбирается ли снимок истории вмешательств
+usage-outcome	0	python3 scripts/usage-outcome-audit.py	что об этой работе говорит сторона, которая про ClaudSoul не знает: трения, исходы, покрытие разметкой
+knowledge-independence	30	python3 scripts/knowledge-independence.py	на чём стоит confidence: на событиях или на записанных поводах (D81)
+meta-contamination	30	python3 scripts/meta-contamination.py	сколько языковых сенсоров считают собственный метадискурс объектным сигналом (D88)
+backlog-return	7	scripts/backlog-return-check.sh	не наступило ли условие возврата у ОТКРЫТОГО пункта долга (зеркало к backlog-recheck)
+colon-lead-in	30	python3 scripts/colon-lead-in-count.py	выборка реплик с зачином-двоеточием — порог решения по D92
+mechanisms-born	30	scripts/mechanisms-born.sh 30	сколько механизмов система породила за окно и сколько из них прослеживаются до записанного повода (D96)
+producer-filter	14	scripts/producer-filter-check.sh	подключён ли отсев чужой речи там, где словарь применяется к речи собеседника (D88)
+stopper-effect	7	scripts/stopper-effect.sh	изменил ли стопор действие после отказа, а не сколько раз сработал
+docs-inventory	7	scripts/docs-inventory.sh	документация описывает то, что есть, и только то, что есть
+docs-duplicates	14	scripts/docs-duplicates.sh	один факт описан в одном месте, а не в двух
+dep-index	7	python3 scripts/dep-index.py --check	индекс зависимостей совпадает с деревом, а не описывает его прошлое
+defect-classes	30	python3 scripts/defect-class-carriers.py	сколько в дереве носителей каждого известного рода дефекта (D109)
+signal-outcomes	14	bash scripts/outcome-share.sh	доля срабатываний каждого повода разбора, за которыми последовал исход, доля ложных (D112) и доля поводов со следом разбора — база корпуса 13% (D211)
+signal-precision	14	bash scripts/signal-precision.sh	срабатывания отказывающих признаков и знаменатель для решения о сужении (D113)
+fix-level-liveness	30	python3 scripts/fix-level-replay.py	жив ли словарь пост-инцидентных фраз: совпадения по корпусу и доля заглушённых (D113)
+question-survival	30	python3 scripts/question-survival.py	ловит ли признак вопроса живые реплики и переживает ли вопрос начало правки (D110)
+dead-sensor	30	bash scripts/dead-sensor-check.sh	признаки без единого срабатывания за окно сессий: сенсор мёртв или мир чист (D204)
+detection-share	14	bash scripts/detection-share.sh	доля «страж сказал» против «промолчал по троттлу» — знаменатель у четырёх журналов (D205)
+authorization-precision	30	python3 scripts/authorization-replay.py	доля реплик, признанных поручением, и сколько правок идёт при формальном «нет авторизации» (D207)
+doc-state-decisions	14	bash scripts/doc-state-decisions.sh	доля правок поведения, прошедших без решения по документу состояния (D209)
+backlog-readings	7	bash scripts/backlog-refresh-readings.sh --check	показания открытых пунктов совпадают с выводом своих команд (D206)
+docs-staleness	7	bash scripts/docs-staleness.sh	документ, описывающий механизм, не старше правки механизма без записанного решения doc-state (по индексу зависимостей)
+doc-claims	7	bash scripts/docs-refresh-claims.sh --check	числа документов состояния совпадают с командами реестра scripts/doc-claims.tsv — правду чисел до 30.08.2026 не проверял никто
+stale-reads	7	bash scripts/backlog-stale-reads.sh	сколько раз за окно сессий показание прочитано устаревшим — ноль значит пересчёта на границе хода хватает (D210)
