@@ -1,0 +1,27 @@
+---
+name: "[from] → [relation_type] → [to]"
+description: [одна строка: природа связи]
+type: relation
+relation_type: role_in        # role_in | knows | studied_at | works_at | part_of | created |
+                              # participated_in | similar_to | contradicts | caused_by | applied_to
+status: active                # active | historical | invalid
+
+confidence: 1
+sources: []                   # Тот же формат что в fact.md.tmpl
+
+from_entity: ""               # ID entity-*.md (источник связи)
+to_entity: ""                 # ID entity-*.md (цель связи)
+direction: directed           # directed | bidirectional
+
+# Temporal validity
+valid_from: ""
+valid_until: null
+temporal_note: ""
+
+domain: []
+tags: []
+edges: []                     # Связи с другими знаниями, если есть
+---
+
+[Дополнительный контекст связи свободной прозой. Обычно короткое пояснение —
+основная информация в frontmatter.]
