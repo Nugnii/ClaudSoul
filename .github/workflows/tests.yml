@@ -1,0 +1,39 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  hooks:
+    name: Hook tests (bash)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Run hook test suite
+        run: bash hooks/tests/run_all.sh
+
+  mcp-server:
+    name: MCP server tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        # Ставим по uv.lock, а не по переписанному руками списку пакетов. Список в этом файле
+        # был копией dependencies из mcp-server/pyproject.toml и разошёлся с ней: там стояло
+        # `mcp[cli]` без верхней границы, pip брал 2.0.0, где FastMCP вынесен из пакета, и
+        # сборка тестов падала с ModuleNotFoundError. Локально та же связка держалась на
+        # uv.lock и была зелёной — расхождение жило ровно между двумя списками зависимостей,
+        # то есть проверка шла в другой рамке, чем работа (pattern-verification-frame-mismatch).
+        # `--frozen` обязателен: он роняет прогон при расхождении lock и pyproject, вместо
+        # того чтобы тихо разрешить зависимости заново и снова разъехаться с локальным.
+        # fastembed тянет ~80MB модель — самый тяжёлый шаг; кэш uv его переиспользует.
+        run: cd mcp-server && uv sync --frozen
+      - name: Run pytest
+        run: cd mcp-server && uv run --frozen python -m pytest -q

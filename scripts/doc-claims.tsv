@@ -1,0 +1,166 @@
+# Реестр утверждений документов: каждое число в документе состояния держится командой.
+#
+# Формат: файл <TAB> регулярное выражение с ОДНОЙ группой (значение) <TAB> ключ doc-figures.sh <TAB> формат <TAB> что это
+# Формат: пусто | comma (0.16 → 0,16) | thousands_comma (13117 → 13,117) | thousands_space (13117 → 13 117)
+# Пересчёт: bash scripts/docs-refresh-claims.sh run ; сверка: --check (стоит в гейте публикации и в страже бампа).
+# Ключ, чей источник на машине недоступен (n/a), пропускается и называется — это не расхождение.
+#
+# Повод (30 августа 2026): README нёс 176 находок при 185, 52 хука при 54, «пять хуков» при девяти —
+# всё верное 25 августа, всё устаревшее за пять дней, потому что жило прозой без команды.
+README.md	(\d+) hooks on Claude Code lifecycle events	hooks_registered		хуков на событиях, первая строка
+README.ru.md	(\d+) хук(?:а|ов)? на события Claude Code	hooks_registered		хуков на событиях, первая строка
+README.md	(\d+) items in the base;	kb_items		записей в базе автора
+README.ru.md	В базе (\d+) запис	kb_items		записей в базе автора
+README.md	starts with (\d+) seed items	seed_items		стартовых знаний в seed
+README.ru.md	начинается с (\d+) стартовых	seed_items		стартовых знаний в seed
+README.md	(\d+) hooks \*do\* interrupt	hooks_interrupt		хуков, вмешивающихся в вызов
+README.md	interrupt: (\d+) ask you to confirm	hooks_ask		хуков, спрашивающих подтверждения
+README.md	\) and (\d+) refuse outright	hooks_deny		хуков, отказывающих
+README.ru.md	Жёстко вмешиваются (\d+) хук	hooks_interrupt		хуков, вмешивающихся в вызов
+README.ru.md	хук(?:а|ов)?: (\d+) спрашива	hooks_ask		хуков, спрашивающих подтверждения
+README.ru.md	\) и (\d+) отказыва	hooks_deny		хуков, отказывающих
+docs/reference.md	(\d+) of the \d+ hooks are wired into	hooks_registered		хуков на событиях, вводный абзац
+docs/reference.md	of the (\d+) hooks are wired into	hooks		хуков всего, вводный абзац
+docs/reference.md	(\d+) of them can actually interrupt	hooks_interrupt		хуков, вмешивающихся в вызов
+docs/reference.md	(\d+) raise `permissionDecision: ask`	hooks_ask		хуков, спрашивающих подтверждения
+docs/reference.md	(\d+) return `deny`	hooks_deny		хуков, отказывающих
+docs/reference.ru.md	подключены (\d+) хук(?:а|ов)? из \d+	hooks_registered		хуков на событиях, вводный абзац
+docs/reference.ru.md	подключены \d+ хук(?:а|ов)? из (\d+)	hooks		хуков всего, вводный абзац
+docs/reference.ru.md	Вмешаться в вызов могут (\d+) из них	hooks_interrupt		хуков, вмешивающихся в вызов
+docs/reference.ru.md	(\d+) поднимают `permissionDecision: ask`	hooks_ask		хуков, спрашивающих подтверждения
+docs/reference.ru.md	(\d+) возвращают `deny`	hooks_deny		хуков, отказывающих
+README.md	(\d+) findings over five months	findings_total		находок проверки языка, всего
+README.ru.md	(\d+) находок за пять месяцев	findings_total		находок проверки языка, всего
+README.md	by a machine (\d+) times	findings_total		то же число в выводе абзаца
+README.ru.md	находит машина, (\d+) раз	findings_total		то же число в выводе абзаца
+README.md	^\| 2026-04 \(from the 24th\) \| (\d+) \|	findings_2026-04		находок за 2026-04
+README.md	^\| 2026-04 \(from the 24th\) \| \d+ \| (\d+) \|	sessions_2026-04		сессий за 2026-04
+README.ru.md	^\| 2026-04 \(с 24-го\) \| (\d+) \|	findings_2026-04		находок за 2026-04
+README.ru.md	^\| 2026-04 \(с 24-го\) \| \d+ \| (\d+) \|	sessions_2026-04		сессий за 2026-04
+README.md	^\| 2026-05 \| (\d+) \|	findings_2026-05		находок за 2026-05
+README.md	^\| 2026-05 \| \d+ \| (\d+) \|	sessions_2026-05		сессий за 2026-05
+README.ru.md	^\| 2026-05 \| (\d+) \|	findings_2026-05		находок за 2026-05
+README.ru.md	^\| 2026-05 \| \d+ \| (\d+) \|	sessions_2026-05		сессий за 2026-05
+README.md	^\| 2026-05 \| \d+ \| \d+ \| \*{0,2}([\d.]+)\*{0,2} \|	per_session_2026-05		на сессию за 2026-05
+README.ru.md	^\| 2026-05 \| \d+ \| \d+ \| \*{0,2}([\d,]+)\*{0,2} \|	per_session_2026-05	comma	на сессию за 2026-05
+README.md	^\| 2026-06 \| (\d+) \|	findings_2026-06		находок за 2026-06
+README.md	^\| 2026-06 \| \d+ \| (\d+) \|	sessions_2026-06		сессий за 2026-06
+README.ru.md	^\| 2026-06 \| (\d+) \|	findings_2026-06		находок за 2026-06
+README.ru.md	^\| 2026-06 \| \d+ \| (\d+) \|	sessions_2026-06		сессий за 2026-06
+README.md	^\| 2026-06 \| \d+ \| \d+ \| \*{0,2}([\d.]+)\*{0,2} \|	per_session_2026-06		на сессию за 2026-06
+README.ru.md	^\| 2026-06 \| \d+ \| \d+ \| \*{0,2}([\d,]+)\*{0,2} \|	per_session_2026-06	comma	на сессию за 2026-06
+README.md	^\| 2026-07 \| (\d+) \|	findings_2026-07		находок за 2026-07
+README.md	^\| 2026-07 \| \d+ \| (\d+) \|	sessions_2026-07		сессий за 2026-07
+README.ru.md	^\| 2026-07 \| (\d+) \|	findings_2026-07		находок за 2026-07
+README.ru.md	^\| 2026-07 \| \d+ \| (\d+) \|	sessions_2026-07		сессий за 2026-07
+README.md	^\| 2026-07 \| \d+ \| \d+ \| \*{0,2}([\d.]+)\*{0,2} \|	per_session_2026-07		на сессию за 2026-07
+README.ru.md	^\| 2026-07 \| \d+ \| \d+ \| \*{0,2}([\d,]+)\*{0,2} \|	per_session_2026-07	comma	на сессию за 2026-07
+README.md	^\| 2026-08 \| (\d+) \|	findings_2026-08		находок за 2026-08
+README.md	^\| 2026-08 \| \d+ \| (\d+) \|	sessions_2026-08		сессий за 2026-08
+README.ru.md	^\| 2026-08 \| (\d+) \|	findings_2026-08		находок за 2026-08
+README.ru.md	^\| 2026-08 \| \d+ \| (\d+) \|	sessions_2026-08		сессий за 2026-08
+README.md	^\| 2026-08 \| \d+ \| \d+ \| \*{0,2}([\d.]+)\*{0,2} \|	per_session_2026-08		на сессию за 2026-08
+README.ru.md	^\| 2026-08 \| \d+ \| \d+ \| \*{0,2}([\d,]+)\*{0,2} \|	per_session_2026-08	comma	на сессию за 2026-08
+README.md	(\d+) unique sessions over the span	sessions_unique		уникальных сессий в телеметрии L6
+README.ru.md	(\d+) уникальных сесси	sessions_unique		уникальных сессий в телеметрии L6
+README.md	session registry counts (\d+) for the same period	registry_sessions_since_2026-04-24		сессий в реестре с 24 апреля
+README.ru.md	Реестр сессий даёт за тот же период (\d+)	registry_sessions_since_2026-04-24		сессий в реестре с 24 апреля
+README.md	(\d+) items recorded with `origin: co-cognition`	kb_co_cognition		знаний с origin co-cognition
+README.ru.md	(\d+) знаний с пометкой `origin: co-cognition`	kb_co_cognition		знаний с origin co-cognition
+README.md	\((\d+)% of \d+ events resolved\)	disagreement_rate		доля закрытых событий контура несогласия
+README.md	\(\d+% of (\d+) events resolved\)	disagreement_total		событий контура несогласия
+README.ru.md	закрыто (\d+) % из \d+ событий	disagreement_rate		доля закрытых событий контура несогласия
+README.ru.md	закрыто \d+ % из (\d+) событий	disagreement_total		событий контура несогласия
+README.md	\| ([\d,]+) injections;	injections_total	thousands_comma	инжекций знаний, из сводки метрик
+README.ru.md	\| ([\d ]+) подач;	injections_total	thousands_space	инжекций знаний, из сводки метрик
+README.md	\| (\d+) pre-action markers across	blocker_markers		пометок blocker-tier
+README.md	pre-action markers across (\d+) sessions	blocker_sessions		сессий с пометками blocker-tier
+README.ru.md	\| (\d+) пометок перед действием	blocker_markers		пометок blocker-tier
+README.ru.md	пометок перед действием в (\d+) сессиях	blocker_sessions		сессий с пометками blocker-tier
+README.md	\| (\d+) firings \|	trust_guard_firings		срабатываний trust-guard
+README.ru.md	\| (\d+) срабатывани[йя] \|	trust_guard_firings		срабатываний trust-guard
+README.md	\| (\d+) of \d+ recorded cases came from a failure	kb_cases_error		кейсов из провала
+README.md	\| \d+ of (\d+) recorded cases came from a failure	kb_cases		кейсов всего
+README.ru.md	\| (\d+) из \d+ записей выросли из ошибки	kb_cases_error		кейсов из провала
+README.ru.md	\| \d+ из (\d+) записей выросли из ошибки	kb_cases		кейсов всего
+README.md	\| (\d+) cases → \d+ patterns	kb_cases		кейсов
+README.md	cases → (\d+) patterns, \d+ principles	kb_patterns		паттернов
+README.md	patterns, (\d+) principles; lineage	kb_principles		принципов
+README.md	lineage on (\d+) of \d+	kb_lineage		обобщений с записанной родословной
+README.md	lineage on \d+ of (\d+)	kb_generalisations		обобщений всего
+README.ru.md	\| (\d+) кейс(?:а|ов)? → \d+ паттерн	kb_cases		кейсов
+README.ru.md	кейс(?:а|ов)? → (\d+) паттерн	kb_patterns		паттернов
+README.ru.md	паттерн(?:а|ов)?, (\d+) принцип	kb_principles		принципов
+README.ru.md	родословная у (\d+) из \d+	kb_lineage		обобщений с записанной родословной
+README.ru.md	родословная у \d+ из (\d+)	kb_generalisations		обобщений всего
+README.md	pattern base grew from 8 to (\d+)	kb_patterns		паттернов
+README.ru.md	база паттернов выросла с 8 до (\d+)	kb_patterns		паттернов
+README.md	is slow: (\d+) principles	kb_principles		принципов
+README.ru.md	идёт медленно: (\d+) принцип	kb_principles		принципов
+README.md	(\d+) success cases against \d+ failures	kb_cases_success		кейсов успеха
+README.md	success cases against (\d+) failures	kb_cases_error		кейсов провала
+README.ru.md	(\d+) записей об успехе против \d+ о сбое	kb_cases_success		кейсов успеха
+README.ru.md	записей об успехе против (\d+) о сбое	kb_cases_error		кейсов провала
+README.md	non-zero on (\d+) item	kb_contradicted_nonzero		знаний с ненулевым contradicted_count
+README.md	non-zero on \d+ items? out of (\d+)	kb_items		знаний всего
+README.ru.md	ненулевой у (\d+) запис	kb_contradicted_nonzero		знаний с ненулевым contradicted_count
+README.ru.md	ненулевой у \d+ запис(?:и|ей)? из (\d+)	kb_items		знаний всего
+README.md	Of (\d+) items \(measured	ki_stored		хранится (отчёт замера knowledge-instrument)
+README.md	items \(measured (\d{4}-\d{2}-\d{2})\)	ki_date		дата отчёта замера
+README.md	stored, (\d+) \([\d.]+%\) have ever reached	ki_reached		доходило до контекста
+README.md	stored, \d+ \(([\d.]+)%\) have ever reached	ki_reached_pct		доля дошедших
+README.md	and (\d+) \([\d.]+%\) stand in the way	ki_acts		действует
+README.ru.md	Из (\d+) запис(?:и|ей)? \(замер	ki_stored		хранится (отчёт замера)
+README.ru.md	\(замер (\d{4}-\d{2}-\d{2})\)	ki_date		дата отчёта замера
+README.ru.md	доходило (\d+) \([\d,]+ %\)	ki_reached		доходило до контекста
+README.ru.md	доходило \d+ \(([\d,]+) %\)	ki_reached_pct	comma	доля дошедших
+README.ru.md	стоят на пути действия (\d+) \(	ki_acts		действует
+README.md	exactly once\*\* \((\d+) item	kb_contradicted_nonzero		знаний с ненулевым contradicted_count
+README.md	exactly once\*\* \(\d+ item of (\d+)	kb_items		знаний всего
+README.ru.md	ровно один раз\*\* \((\d+) запис	kb_contradicted_nonzero		знаний с ненулевым contradicted_count
+README.ru.md	ровно один раз\*\* \(\d+ запис(?:ь|и|ей)? из (\d+)	kb_items		знаний всего
+CLAUDE.md	(\d+) принципов \+ \d+ universal-паттернов	kb_seed_principles		принципов в seed
+CLAUDE.md	принципов \+ (\d+) universal-паттернов	kb_seed_patterns		паттернов в seed
+docs/architecture.md	\*\*(\d+) мостов; разбивка по статусам	bridges		мостов в карте слоёв (§2)
+docs/architecture.md	Отказ через harness реализован у (\d+) хук	hooks_deny		хуков, отказывающих (§3 лестница уровней)
+docs/architecture.md	Граф доменов: (\d+) узлов \(7 корневых\)	domains		узлов графа доменов (§4 статус)
+CLAUDE.md	Inter-Layer Bridges \((\d+) мостов	bridges		мостов, дерево §3
+CLAUDE.md	\| Мосты L2-L7 \| (\d+) всего	bridges		мостов, таблица статуса §5
+CLAUDE.md	# (\d+) активн(?:ый|ых) хук(?:а|ов)? \+ \d+ библиотек	hooks		активных хуков, дерево §3
+CLAUDE.md	# \d+ активн(?:ый|ых) хук(?:а|ов)? \+ (\d+) библиотек	libs		библиотек, дерево §3
+CLAUDE.md	\| Хуки alive learning system \| (\d+) активн	hooks		активных хуков, таблица статуса §5
+CLAUDE.md	\| Хуки alive learning system \| \d+ активн(?:ый|ых) \+ (\d+) библиотек	libs		библиотек, таблица статуса §5
+CLAUDE.md	# (\d+) скилл(?:а|ов)?: user-invocable	skills		скиллов, дерево §3
+CLAUDE.md	\| Скиллы \| (\d+):	skills		скиллов, таблица статуса §5
+CLAUDE.md	# (\d+) файл(?:а|ов)? тестов хуков	hook_test_files		файлов тестов хуков, дерево §3
+CLAUDE.md	\| Тесты \| (\d+) файл	hook_test_files		файлов тестов хуков, таблица статуса §5
+hooks/bridge-health-digest.sh	(\d+) bridges in bridges/	bridges		мостов в шапке дайджеста здоровья мостов
+# Доки модулей (30 августа 2026): «N проверок» — из вывода самого теста, ключ tests_<имя_теста_без_.sh>.
+.claude-docs/modules/ablation-runner.md	runner\}\.sh` — (\d+), \d+, \d+ и \d+	tests_test_ablation_journal		проверок test_ablation_journal
+.claude-docs/modules/ablation-runner.md	runner\}\.sh` — \d+, (\d+), \d+ и \d+	tests_test_ablation_sampler		проверок test_ablation_sampler
+.claude-docs/modules/ablation-runner.md	runner\}\.sh` — \d+, \d+, (\d+) и \d+	tests_test_ablation_analyze		проверок test_ablation_analyze
+.claude-docs/modules/ablation-runner.md	runner\}\.sh` — \d+, \d+, \d+ и (\d+)	tests_test_ablation_runner		проверок test_ablation_runner
+.claude-docs/modules/backlog-item-shape.md	test_backlog_item_shape\.sh` \((\d+) провер	tests_test_backlog_item_shape		проверок test_backlog_item_shape
+.claude-docs/modules/backlog-touch-check.md	test_backlog_touch_check\.sh` \((\d+) провер	tests_test_backlog_touch_check		проверок test_backlog_touch_check, блок Файлы
+.claude-docs/modules/backlog-touch-check.md	\*\*Тесты\.\*\* (\d+) провер	tests_test_backlog_touch_check		проверок test_backlog_touch_check, блок Тесты
+.claude-docs/modules/backlog-vanish-check.md	test_backlog_vanish\.sh`\s*\((\d+) провер	tests_test_backlog_vanish		проверок test_backlog_vanish
+.claude-docs/modules/declared-problem-recorded.md	test_declared_problem_recorded\.sh` \((\d+) провер	tests_test_declared_problem_recorded		проверок test_declared_problem_recorded
+.claude-docs/modules/declared-problem-recorded.md	test_declared_problem_per_turn` — (\d+) провер	tests_test_declared_problem_per_turn		проверок test_declared_problem_per_turn
+.claude-docs/modules/doc-impact-check.md	test_doc_impact_check\.sh` \((\d+) провер	tests_test_doc_impact_check		проверок test_doc_impact_check
+.claude-docs/modules/doc-impact-check.md	test_doc_state_decision\.sh` \((\d+) провер	tests_test_doc_state_decision		проверок test_doc_state_decision
+.claude-docs/modules/external-correction-gap.md	test_external_correction_gap\.sh` \((\d+) провер	tests_test_external_correction_gap		проверок test_external_correction_gap
+.claude-docs/modules/five-whys-gate.md	test_five_whys_gate \((\d+) провер	tests_test_five_whys_gate		проверок test_five_whys_gate
+.claude-docs/modules/five-whys-gate.md	test_correction_triggers_analysis \((\d+),	tests_test_correction_triggers_analysis		проверок test_correction_triggers_analysis
+.claude-docs/modules/five-whys-gate.md	test_question_triggers_analysis \((\d+),	tests_test_question_triggers_analysis		проверок test_question_triggers_analysis
+.claude-docs/modules/five-whys-gate.md	test_gate_write_detection` — (\d+) провер	tests_test_gate_write_detection		проверок test_gate_write_detection
+.claude-docs/modules/fix-level-check.md	test_fix_level_check \((\d+) провер	tests_test_fix_level_check		проверок test_fix_level_check
+.claude-docs/modules/partial-read-guard.md	test_partial_read_guard \((\d+) провер	tests_test_partial_read_guard		проверок test_partial_read_guard
+.claude-docs/modules/relative-date-check.md	test_relative_date_check \((\d+) провер	tests_test_relative_date_check		проверок test_relative_date_check
+.claude-docs/modules/root-cause.md	test_root_cause_lib` \((\d+) провер	tests_test_root_cause_lib		проверок test_root_cause_lib
+.claude-docs/modules/root-cause.md	test_root_cause_doctrine_drift` \((\d+) провер	tests_test_root_cause_doctrine_drift		проверок test_root_cause_doctrine_drift
+.claude-docs/modules/rules-write-bypass.md	test_rules_write_bypass\.sh`\s*\((\d+) провер	tests_test_rules_write_bypass		проверок test_rules_write_bypass
+.claude-docs/modules/usage-outcome-audit.md	test_usage_outcome_audit \((\d+) провер	tests_test_usage_outcome_audit		проверок test_usage_outcome_audit
+README.md	(\d+) active hooks, \d+ skills	hooks		активных хуков, шапка «At a glance»
+README.ru.md	(\d+) активных хук(?:а|ов), \d+ скилл	hooks		активных хуков, шапка «Коротко о системе»
+README.md	active hooks, (\d+) skills	skills		скиллов, шапка «At a glance»
+README.ru.md	активных хук(?:а|ов), (\d+) скилл	skills		скиллов, шапка «Коротко о системе»
