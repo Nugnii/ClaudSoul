@@ -1,0 +1,48 @@
+name: tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  hooks:
+    name: Hook tests (bash)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install jq
+        run: sudo apt-get update && sudo apt-get install -y jq
+      - name: Install gitleaks
+        # Страж секретов без gitleaks по правилу «инструмента нет — молчать» выходит без решения,
+        # и его тест пропускается названным SKIP — без этого шага слой секретов в чистой рамке не
+        # измеряется (решение владельца 12 сентября 2026). Версия та же, что на машине автора;
+        # конфиг страж берёт из security/gitleaks.toml репозитория, когда ~/.claude/security нет.
+        run: |
+          curl -fsSL https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz -o /tmp/gitleaks.tgz
+          sudo tar -xzf /tmp/gitleaks.tgz -C /usr/local/bin gitleaks
+          gitleaks version
+      - name: Run hook test suite
+        run: bash hooks/tests/run_all.sh
+
+  mcp-server:
+    name: MCP server tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - name: Install dependencies
+        # Ставим по uv.lock, а не по переписанному руками списку пакетов. Список в этом файле
+        # был копией dependencies из mcp-server/pyproject.toml и разошёлся с ней: там стояло
+        # `mcp[cli]` без верхней границы, pip брал 2.0.0, где FastMCP вынесен из пакета, и
+        # сборка тестов падала с ModuleNotFoundError. Локально та же связка держалась на
+        # uv.lock и была зелёной — расхождение жило ровно между двумя списками зависимостей,
+        # то есть проверка шла в другой рамке, чем работа (pattern-verification-frame-mismatch).
+        # `--frozen` обязателен: он роняет прогон при расхождении lock и pyproject, вместо
+        # того чтобы тихо разрешить зависимости заново и снова разъехаться с локальным.
+        # fastembed тянет ~80MB модель — самый тяжёлый шаг; кэш uv его переиспользует.
+        run: cd mcp-server && uv sync --frozen
+      - name: Run pytest
+        run: cd mcp-server && uv run --frozen python -m pytest -q

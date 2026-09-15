@@ -1,0 +1,200 @@
+#!/usr/bin/env bash
+# stopper-effect.sh — изменил ли стопор ДЕЙСТВИЕ, а не сколько раз сработал.
+# Результат: у отказов, ТРЕБУЮЩИХ разбора, доля «цепочка произнесена» не падает и обойдённых нет
+# Проверка результата: bash scripts/stopper-effect.sh даёт 0
+#
+#
+# Повод — знание 28 августа 2026,
+# `case-2026-08-28-reminder-fired-and-was-read-and-changed-nothing`: гейт разбора сработал
+# в ходе, был прочитан и не изменил ничего. По учёту «сколько раз сработал» он выглядел бы
+# здоровым. Значит у стража, который должен менять поведение, единственный честный
+# показатель — доля случаев, где после срабатывания действие изменилось.
+#
+# Считается по РАСШИФРОВКАМ, а не по журналу хука: отказ виден в них сам, текстом причины,
+# и вместе с тем, что было после. Журнал сказал бы только «сработал».
+#
+# ТРИ ПОЧИНКИ 4 сентября 2026. Замер отчитывался «152 отказа, цепочка в 34%, обойдено 100»
+# — и все три числа были произведением его собственных дефектов, а не поведения агента.
+# После починки: 99 отказов, у требующих разбора цепочка в 91%.
+#
+#  1. ОТКАЗ ОПОЗНАЁТСЯ ПО `is_error`, а не по метке в тексте. Метку несёт и ИСХОДНИК
+#     стража, и его ручной прогон, и падение теста: 56 совпадений из 155 приходились на
+#     чтение файлов и проверки хуков, где никакого вызова не отменяли. Узел исправно
+#     считал метку в том, что ему подали; неверен был ВХОД — все результаты вперемешку,
+#     хотя расшифровка хранит признак отказа отдельным полем. Разделение измерено:
+#     `is_error` истинно у 99, ложно у 56, ни одного спорного случая (осмотрены все 7
+#     пограничных: исходник, JSON ручных прогонов, сообщение упавшего теста).
+#
+#  2. ОТКАЗЫ РАЗДЕЛЕНЫ ПО ТОМУ, ЧЕГО ТРЕБУЮТ. Премисса «отказ требует цепочки» была верна
+#     28 августа, когда отказывал ровно ОДИН страж — гейт разбора. Стражей-отказчиков стало
+#     пять, и у четырёх требуемый выход другой: переписать команду переносимо, пойти через
+#     библиотеку слияния, назвать скилл латиницей. Считать им «цепочку» — мерить не тот
+#     предмет: 30 отказов из 99 занижали долю, ничего не сказав о собственном исполнении.
+#     Их эффект НЕ ИЗМЕРЕН этим замером и назван отдельной строкой, а не свёрнут в дробь.
+#
+#  3. КРИТЕРИЙ ЦЕПОЧКИ — КАНОНИЧЕСКИЙ (`rc_chain_spoken`, ADR-017 от 30 августа 2026), а не
+#     своя копия «почему ≥ 3». Копия жила здесь с 28 августа и не узнала об отмене: связный
+#     разбор через заголовки шаблона, стрелки спуска или реестр мест с корнем она считала
+#     обходом. Разница на живом корпусе: 52% против 91% на одних и тех же 69 отказах.
+#
+# ВТОРОЙ ПОТОЛОК, измеренный на первом же живом прогоне 28 августа 2026: обход ЛОЖНОГО
+# отказа неотличим от обхода настоящего. Из двух первых отказов один был ложным
+# (`bsd_only_command_written_via_shell` поймал путь `hooks/…sh` из хвоста команды и
+# кириллицу в ПИТОНОВСКОМ регексе, где она безопасна); правильный ход — переписать
+# команду, и замер засчитал это как «обойдено». Значит доля «цепочка произнесена» занижена
+# ровно на число ложных срабатываний, и читать её как оценку послушания нельзя, пока
+# ложные не считаются отдельно.
+#
+# ЧЕГО ЗАМЕР НЕ ГОВОРИТ. Он не судит о КАЧЕСТВЕ цепочки — только о её наличии. Цепочка из
+# трёх формальных «почему» засчитается наравне с настоящим спуском к корню. Это названный
+# потолок: качество рассуждения наблюдаемым признаком не берётся, и притворяться, что
+# берётся, — та же подмена предмета, ради которой замер и заводится.
+#
+# Использование: scripts/stopper-effect.sh
+# Exit: 0 — прогон состоялся; 1 — есть обойдённые отказы среди ТРЕБУЮЩИХ разбора.
+set -uo pipefail
+
+DIR="${STOPPER_TRANSCRIPT_DIR:-$HOME/.claude/projects}"
+command -v jq >/dev/null 2>&1 || { echo "stopper-effect: нужен jq" >&2; exit 2; }
+[ -d "$DIR" ] || { echo "stopper-effect: нет каталога расшифровок ($DIR)" >&2; exit 2; }
+command -v python3 >/dev/null 2>&1 || { echo "stopper-effect: нужен python3" >&2; exit 2; }
+
+# Критерий цепочки берётся из канона, а не пишется здесь заново — см. починку 3 выше.
+_RC_LIB="$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")/../hooks" 2>/dev/null && pwd)/root-cause-lib.sh"
+[ -f "$_RC_LIB" ] || _RC_LIB="$HOME/.claude/hooks/root-cause-lib.sh"
+[ -f "$_RC_LIB" ] || { echo "stopper-effect: нет root-cause-lib.sh — критерий цепочки взять неоткуда" >&2; exit 2; }
+# shellcheck source=/dev/null
+. "$_RC_LIB"
+
+WORK=$(mktemp -d) || { echo "stopper-effect: нет временного каталога" >&2; exit 2; }
+trap 'rm -rf "$WORK"' EXIT
+
+# Питон отбирает НАСТОЯЩИЕ отказы и раскладывает речь после каждого по файлам;
+# суждение о цепочке выносит библиотека, а не он.
+python3 - "$DIR" "$WORK" <<'PY'
+import json, os, sys
+
+root, work = sys.argv[1], sys.argv[2]
+DENY = "⛔ ОТКАЗ (вызов не выполнен)"
+# Гейт разбора — единственный страж, чей требуемый выход ЕСТЬ цепочка. Опознаётся по
+# собственной фразе отказа, а не по имени файла: имя в расшифровке не сохраняется.
+CHAIN_DEMAND = "цепочка причин"
+
+files = []
+for base, _, names in os.walk(root):
+    for n in names:
+        if n.endswith(".jsonl"):
+            files.append(os.path.join(base, n))
+
+def blocks(rec):
+    m = rec.get("message") or rec
+    c = m.get("content") or []
+    return c if isinstance(c, list) else []
+
+def role(rec):
+    m = rec.get("message") or {}
+    return m.get("role") or rec.get("role") or ""
+
+def text_of(rec):
+    return "\n".join(b.get("text", "") for b in blocks(rec)
+                     if isinstance(b, dict) and b.get("type") == "text")
+
+def deny_text(rec):
+    """Текст ОТКАЗАННОГО вызова, либо None. Отказ — это is_error, а не метка в тексте."""
+    for b in blocks(rec):
+        if not (isinstance(b, dict) and b.get("type") == "tool_result"):
+            continue
+        if not b.get("is_error"):
+            continue
+        c = b.get("content")
+        s = c if isinstance(c, str) else "\n".join(
+            x.get("text", "") for x in c if isinstance(x, dict)) if isinstance(c, list) else ""
+        if DENY in s:
+            return s
+    return None
+
+seen = phantom = 0
+idx = []
+for fp in sorted(files):
+    try:
+        recs = [json.loads(l) for l in open(fp, encoding="utf-8", errors="replace") if l.strip()]
+    except ValueError:
+        continue
+    for i, rec in enumerate(recs):
+        dt = deny_text(rec)
+        if dt is None:
+            # Метка без is_error — исходник стража, его ручной прогон или падение теста.
+            for b in blocks(rec):
+                if isinstance(b, dict) and b.get("type") == "tool_result":
+                    c = b.get("content")
+                    s = c if isinstance(c, str) else "\n".join(
+                        x.get("text", "") for x in c if isinstance(x, dict)) if isinstance(c, list) else ""
+                    if DENY in s:
+                        phantom += 1
+                        break
+            continue
+        seen += 1
+        after = []
+        for nxt in recs[i + 1:]:
+            # Вставка харнесса (isMeta) под ролью "user" границей хода не является:
+            # замер 8 сентября 2026 — 42 расшифровки из 204 (21%) кончаются такой вставкой.
+            if role(nxt) == "user" and not nxt.get("isMeta") and text_of(nxt).strip():
+                break
+            if role(nxt) == "assistant":
+                after.append(text_of(nxt))
+        path = os.path.join(work, f"span-{seen:05d}.txt")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write("\n".join(after))
+        idx.append(("chain" if CHAIN_DEMAND in dt else "other", path))
+
+with open(os.path.join(work, "index.tsv"), "w", encoding="utf-8") as fh:
+    for kind, path in idx:
+        fh.write(f"{kind}\t{path}\n")
+with open(os.path.join(work, "counts.tsv"), "w", encoding="utf-8") as fh:
+    fh.write(f"{seen}\t{phantom}\n")
+PY
+
+read -r DENIES PHANTOM < "$WORK/counts.tsv"
+
+echo "СТОПОР: изменил ли действие (не «сколько раз сработал»)"
+echo "  настоящих отказов: ${DENIES}   (метка без is_error — исходник и прогоны стражей: ${PHANTOM}, не считаются)"
+if [ "${DENIES:-0}" -eq 0 ]; then
+    echo "  судить не о чем: отказов в корпусе нет."
+    echo "  Замер заведён ДО данных намеренно — иначе его никто не построит потом,"
+    echo "  и разговор о пользе стопоров останется рассказом."
+    exit 0
+fi
+
+CH_TOT=0; CH_OK=0; OT_TOT=0
+while IFS=$'\t' read -r kind path; do
+    [ -n "${path:-}" ] || continue
+    if [ "$kind" = "chain" ]; then
+        CH_TOT=$((CH_TOT + 1))
+        if rc_chain_spoken "$(rc_trace_text < "$path")"; then CH_OK=$((CH_OK + 1)); fi
+    else
+        OT_TOT=$((OT_TOT + 1))
+    fi
+done < "$WORK/index.tsv"
+
+CH_BY=$((CH_TOT - CH_OK))
+echo
+if [ "$CH_TOT" -gt 0 ]; then
+    echo "  ТРЕБУЮТ РАЗБОРА (гейт причин): ${CH_TOT}"
+    echo "    цепочка произнесена: ${CH_OK}   ($((100 * CH_OK / CH_TOT))%)"
+    echo "    обойдено без цепочки: ${CH_BY}"
+else
+    echo "  ТРЕБУЮТ РАЗБОРА (гейт причин): 0 — доля не считается, судить не о чем"
+fi
+if [ "$OT_TOT" -gt 0 ]; then
+    echo "  ПРОЧИЕ СТРАЖИ: ${OT_TOT} — их требуемый выход не цепочка, а исполнение"
+    echo "    (переносимая команда, библиотека слияния, латиница в имени скилла)."
+    echo "    Их эффект этим замером НЕ ИЗМЕРЕН и в долю выше не свёрнут."
+fi
+echo
+echo "Замер о НАЛИЧИИ цепочки, не о её качестве: три формальных «почему» засчитаются"
+echo "наравне с настоящим спуском к корню. Потолок назван намеренно."
+if [ "$CH_BY" -gt 0 ]; then
+    echo "[замер: находки, не сбой] — обойдённые отказы выше"
+    exit 1
+fi
+exit 0

@@ -1,0 +1,74 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "claudsoul://schemas/entity",
+  "title": "Entity (Extract output)",
+  "type": "object",
+  "required": ["name", "entity_type", "attributes"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {"type": "string", "minLength": 1},
+    "aliases": {"type": "array", "items": {"type": "string"}, "default": []},
+    "description": {"type": "string"},
+    "entity_type": {
+      "type": "string",
+      "enum": ["person", "company", "concept", "event", "place", "work", "product"]
+    },
+    "attributes": {
+      "type": "object",
+      "additionalProperties": {
+        "oneOf": [
+          {"$ref": "#/$defs/attribute_value"},
+          {"type": "array", "items": {"$ref": "#/$defs/attribute_value"}}
+        ]
+      }
+    },
+    "trajectory": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["date", "observation"],
+        "properties": {
+          "date": {"type": "string"},
+          "observation": {"type": "string"},
+          "source": {"type": "string"}
+        }
+      },
+      "default": []
+    },
+    "first_seen": {"type": "string"},
+    "domain": {"type": "array", "items": {"type": "string"}, "default": []},
+    "tags": {"type": "array", "items": {"type": "string"}, "default": []},
+    "edges": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": {"type": "string"}
+      },
+      "default": []
+    }
+  },
+  "$defs": {
+    "attribute_value": {
+      "type": "object",
+      "required": ["value", "source_type", "sources"],
+      "properties": {
+        "value": {},
+        "confidence": {"type": "integer", "minimum": 1, "maximum": 5},
+        "source_type": {
+          "type": "string",
+          "enum": ["self_report", "document", "third_party", "behavioral", "cross_reference"]
+        },
+        "sources": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+        "level": {"type": "string"},
+        "contradiction": {
+          "type": "object",
+          "properties": {
+            "stated_value": {},
+            "stated_source": {"type": "string"},
+            "stated_confidence": {"type": "integer"}
+          }
+        }
+      }
+    }
+  }
+}

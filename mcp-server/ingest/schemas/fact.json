@@ -1,0 +1,40 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "claudsoul://schemas/fact",
+  "title": "Fact (Extract output)",
+  "type": "object",
+  "required": ["description", "fact_type", "sources"],
+  "additionalProperties": false,
+  "properties": {
+    "name": {"type": "string"},
+    "description": {"type": "string", "minLength": 1},
+    "fact_type": {"type": "string", "enum": ["attribute", "event", "rule", "definition"]},
+    "sources": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "type"],
+        "properties": {
+          "id": {"type": "string"},
+          "type": {
+            "type": "string",
+            "enum": ["self_report", "document", "third_party", "behavioral", "cross_reference"]
+          },
+          "extracted": {"type": "string"}
+        }
+      }
+    },
+    "valid_from": {"type": "string"},
+    "valid_until": {"type": ["string", "null"]},
+    "temporal_note": {"type": "string"},
+    "entity_refs": {"type": "array", "items": {"type": "string"}, "default": []},
+    "domain": {"type": "array", "items": {"type": "string"}, "default": []},
+    "tags": {"type": "array", "items": {"type": "string"}, "default": []},
+    "edges": {
+      "type": "array",
+      "items": {"type": "object", "additionalProperties": {"type": "string"}},
+      "default": []
+    }
+  }
+}

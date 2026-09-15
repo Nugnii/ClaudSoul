@@ -1,0 +1,34 @@
+# Шаблон CI — скопировать в проект как .github/workflows/security.yml
+# Те же три сканера, что и локально: расхождение локального и CI даёт ложное
+# спокойствие в одну сторону и ложную тревогу в другую.
+name: security
+on: [push, pull_request]
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with: { fetch-depth: 0 }   # gitleaks смотрит историю, а не только срез
+
+      - name: секреты
+        uses: gitleaks/gitleaks-action@v2
+        env: { GITHUB_TOKEN: "${{ secrets.GITHUB_TOKEN }}" }
+
+      - name: код (SAST)
+        run: |
+          curl -sSL -o opengrep https://github.com/opengrep/opengrep/releases/latest/download/opengrep_manylinux_x86
+          chmod +x opengrep && sudo mv opengrep /usr/local/bin/
+          git clone --depth 1 https://github.com/semgrep/semgrep-rules.git /tmp/rules
+          # посторонние yaml роняют весь прогон с exit=7 и «0 находок»
+          find /tmp/rules \( -name '*.yaml' -o -name '*.yml' \) ! -path '*/.git/*' \
+            -exec sh -c 'grep -q "^rules:" "$1" || rm -f "$1"' _ {} \;
+          opengrep scan --config /tmp/rules --error --json --output findings.json .
+
+      - name: зависимости (SCA)
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: fs
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          scanners: vuln,secret,misconfig

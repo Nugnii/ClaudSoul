@@ -1,0 +1,9 @@
+{
+  "version": "1.0.9",
+  "last_recomputed": null,
+  "per_tier": {
+    "1": {"total": 0, "weakened": 0, "natural_rate": null},
+    "2": {"total": 0, "weakened": 0, "natural_rate": null},
+    "3": {"total": 0, "weakened": 0, "natural_rate": null}
+  }
+}
