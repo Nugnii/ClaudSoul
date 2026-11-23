@@ -1,0 +1,696 @@
+---
+name: Переносимость оболочки — не полагайся на семантику конкретного shell в коде хуков и скиллов
+description: Код для хуков и скиллов полагается на семантику конкретной оболочки (bash word-splitting, массивы, read -ra), но среда исполнения не гарантирована — Bash-инструмент Claude Code на macOS это zsh. Результат — молчаливые сбои. Писать переносимо или оборачивать в bash -c; парсинг делегировать jq/awk.
+type: pattern
+outcome: error
+confidence: 5
+impact: 3
+intensity: 2
+confirmed_count: 1
+contradicted_count: 0
+last_confirmed: 2026-11-18
+source_cases:
+  - case-2026-11-10-zsh-equals-third-session-no-mechanism.md
+  - case-2026-11-07-guillemet-after-var-twice-in-an-hour.md
+  - case-2026-11-01-zsh-slips-recur-despite-six-cases.md
+  - case-2026-10-28-heredoc-inside-command-substitution-bash32.md
+  - case-2026-10-28-zsh-equals-in-output-separators.md
+  - case-2026-09-24-backslash-loses-meaning-inside-brackets.md
+  - case-2026-09-13-two-guards-two-scopes-one-gap.md
+  - case-2026-08-31-grep-length-semantics-diverge.md
+  - case-2026-08-30-signal-dead-by-construction-and-hostile-to-portable-code.md
+  - case-2026-04-21-bash-tool-is-zsh.md
+  - case-2026-06-20-zsh-for-loop-no-word-split.md
+  - case-2026-06-20-zsh-nested-quotes.md
+  - case-2026-06-21-grep-is-ugrep-not-gnu.md
+  - "ProjectA security-gate.sh (2026-07-06): незакавыченный `$SEMGREP` (= путь с пробелом «…/My Project/…/.venv-security/bin/semgrep») словоделился на 2 аргумента → команда не найдена → пустой JSON → гейт дал ЛОЖНУЮ блокировку релиза. Ручной прогон работал (относительный путь без пробела). Фикс: `\"$SEMGREP\"` во всех вызовах. Всегда квотить переменные с путями (репо под «My Project» — пробел в пути гарантирован)."
+  - case-2026-09-16-recorded-root-is-a-hypothesis-measured.md
+  - case-2026-10-11-zsh-colon-modifier-ate-path-probe-measured-empty-snapshot.md
+  - case-2026-10-24-awk-substr-cuts-letter-in-utf8-locale.md
+  - case-2026-11-18-growing-value-through-env-hits-linux-arg-limit.md
+  - case-2026-11-18-mkdir-lock-not-exclusive-on-uutils.md
+source_session: ""
+status: active
+preceded_artifact: no   # portable-lib.sh (v1.14.3) построен ПОСЛЕ того, как CI упал на date -j, а не из знания. Знание существовало (уверенность 5, девять подтверждений) и было процитировано в шапке, но причиной постройки был красный прогон, а не оно. Ровно тот случай, ради различения которого поле и заведено
+
+# Контекстные якоря
+domain: [shell_scripting, bash, zsh, hooks, skills, claude_code_internals, tooling]
+situation: "writing_shell_command_for_hook_or_skill"
+trigger: "shell_specific_construct_in_unverified_environment; не к месту: чтение/поиск файлов при работе с markdown, конструкции с одинаковой семантикой bash/zsh (pipefail)"
+stakes: "silently_broken_command, tests_pass_but_real_env_fails"
+actors: [agent, bash_tool]
+environment: "macos, claude_code_bash_tool_is_zsh"
+circumstances: "sourced_library_or_skill_command, execution_shell_not_guaranteed"
+purpose: "portable_robust_tooling"
+method: "bash_c_wrapper_or_delegate_to_jq_awk"
+tags: [shell_compat, environment_assumption, read_ra, arrays, word_splitting, portability]
+
+need: "avoid_shell_specific_breakage_in_hooks_and_skills"
+urgency: "when_relevant"
+availability: "unique"
+
+related:
+  - case-2026-04-21-bash-tool-is-zsh.md
+  - case-2026-04-15-grep-set-e-crash.md
+  - case-2026-04-22-pipefail-head-jq-jsonl.md
+  - pattern-inside-out-blindness.md
+edges:
+  - specializes: pattern-inside-out-blindness.md
+  - generalizes: case-2026-04-21-bash-tool-is-zsh.md
+
+# Promotion & scope (v1.0.9)
+promotion_tier: 2
+scope: universal
+origin_domain: shell_scripting
+
+# Modification lineage
+modification_history:
+  - date: 2026-08-31
+    kind: narrowed
+    reason: "живые «не к месту» журнала исходов: grep/sed при письме markdown (shell-код не трогался) и дефект pipefail, чья семантика в bash и zsh совпадает. В trigger вписаны оба исключения"
+    trigger_case: "anchor-review-queue 2026-08-31"
+  - date: 2026-08-30
+    kind: narrowed
+    reason: "сигнал bsd_only_command_in_hook (отказ на Edit/Write в hooks|scripts с BSD-формой в тексте) снят: первый прогон dead-sensor — ноль срабатываний за 40 сессий; реплей по 33 расшифровкам — 14 правок с такими формами прошли мимо, 39 шли через Bash, где стоит свой сигнал bsd_only_command_written_via_shell (сигнал на Edit/Write мёртв по построению); а в дереве 10 файлов несут BSD-формы парой с GNU, и сработавший сигнал отказал бы на переносимом коде. Инвариант «BSD-форма только в паре с GNU» держит тест по дереву hooks/tests/test_bsd_forms_paired.sh — он видит результат правки любым инструментом"
+    trigger_case: case-2026-08-30-signal-dead-by-construction-and-hostile-to-portable-code.md
+  - date: 2026-07-29
+    kind: narrowed
+    reason: "сигналы сужены до Edit/MultiEdit и дополнены предикатом. При Write в payload уходит ВЕСЬ файл, и совпадение нельзя отличить от законного фрагмента в другом месте — замер: горело на 5 файлах из 6, включая portable-lib.sh, где `stat -f` стоит в запасной ветке легально. При Edit payload это изменяемый кусок: горит на трёх формах дефекта, молчит на трёх чистых правках включая русский комментарий"
+    trigger_case: case-2026-07-29-signal-enumerates-cannot-predicate.md
+  - date: 2026-07-29
+    kind: reinforced_after_challenge
+    reason: "поднят до blocker-tier — сигналы выведены из пяти ИЗМЕРЕННЫХ отказов за одну сессию (date -j, stat -f, tail -r, tr с кириллицей, диапазон [а-яё] в C.UTF-8), а не придуманы. Заявка на это лежала в escalation_hint с 2026-06-21 и полтора месяца не была закрыта"
+    trigger_case: case-2026-07-29-fix-inherits-its-own-defect.md
+  - date: 2026-06-21
+    kind: narrowed
+    reason: "limitation «grep переносимы, обёртки не требуют» сужена — системный grep может быть ugrep со строгим ERE (литеральные { падают); правило теперь покрывает не только shell, но и идентичность CLI-инструмента"
+    trigger_case: case-2026-06-21-grep-is-ugrep-not-gnu.md
+provenance_log:
+  - date: 2026-07-29
+    kind: reinforced
+    reason: "dis_scan_open: повторное 'local sid' в цикле печатает sid=<значение> в stdout под zsh, чисто в bash; выдача функции разбирается потребителями, и /learn предписывает звать её через Bash-инструмент, то есть под zsh"
+    trigger_case: v1.14.1 D9 root cause
+  - date: 2026-07-29
+    kind: reinforced
+    reason: "класс дал четвёртую форму за сессию; корень оказался не в самом знании, а в том, что его сигнал детекции мог только перечислять"
+    trigger_case: case-2026-07-29-signal-enumerates-cannot-predicate
+  - date: 2026-08-07
+    kind: reinforced
+    reason: "инжект 2026-08-02: в той же сессии неэкранированный === в zsh-инлайне дважды ронял команду ((eval): not found) — семантика оболочки укусила ровно по правилу"
+  - date: 2026-08-08
+    kind: reinforced
+    reason: "хук external-correction-gap написан по правилам переносимости: to_lower из portable-lib для кириллицы, фиксированные подстроки вместо кириллических классов, явные заглавные fallback-написания — тест зелёный в т.ч. в рамке CI"
+  - date: 2026-08-08
+    kind: reinforced
+    reason: "accepted-alternative-gap: bash-шебанг, POSIX-совместимые конструкции, транскрипт-jq по образцу output-language-check — семантика shell не предполагается, знание соблюдено"
+  - date: 2026-08-08
+    kind: reinforced
+    reason: "ablation-phase-guard: «$PHASE» — ёлочка вплотную к переменной, байт прилип к имени (unbound под set -u); blocker предупреждал об этом классе тем же днём — знание инжектилось и не применилось"
+  - date: 2026-08-09
+    kind: reinforced
+    reason: "pre-commit на #!/bin/sh: убрал пайп вместо set -o pipefail — статус конвейера скрыл бы падение сборки под set -e"
+  - date: 2026-08-09
+    kind: reinforced
+    reason: "deploy.sh получил local+disown — проверил шебанг (#!/usr/bin/env bash) и прогнал конструкции на macOS bash 3.2 перед тем как считать фикс готовым"
+  - date: 2026-08-09
+    kind: reinforced
+    reason: "npm run lint под 'timeout 900' → zsh: command not found: timeout (macOS без coreutils); тот же класс"
+  - date: 2026-08-11
+    kind: reinforced
+    reason: "дважды подстановка в zsh сломала заголовки curl (word splitting в ${var:+-H ...}) — выдача пустая, чуть не принял за отказ сервера; проверил прямым вызовом"
+  - date: 2026-08-15
+    kind: reinforced
+    reason: "в compile-проходе обернул read -ra в bash -c из-за возможного zsh — прямое применение переносимости"
+  - date: 2026-08-16
+    kind: reinforced
+    reason: "фикс канарейки: mktemp-шаблон без суффикса (macOS), счётчик в подоболочке заменён на mktemp — семантика shell учтена, тесты 16/16"
+  - date: 2026-08-21
+    kind: reinforced
+    reason: "partial-read-guard.sh: ${FILE_PATH,,} упало на bash 3.2 (macOS) — bad substitution; заменено на tr. Ровно предсказанный класс"
+  - date: 2026-08-23
+    kind: reinforced
+    reason: "правки в 9 хуках велись с оглядкой на переносимость: bash -n на каждом, fallback-определение is_git_commit при отсутствии библиотеки, grep -E без GNU-специфики; отдельно подтвердилось на macOS, где нет timeout(1)"
+  - date: 2026-08-25
+    kind: reinforced
+    reason: "Написал в тесте '«$trimmed»' — bash 3.2 включил первый байт UTF-8 символа » (xc2) в имя переменной, тест упал с 'trimmed?: unbound variable' вместо того чтобы назвать нарушение. Плюс '${var: -50}' там же роняет под set -u. Оба поймал только мутационный прогон: на здоровом дереве страж был зелёный."
+  - date: 2026-08-25
+    kind: reinforced
+    reason: "Третий раз за сессию: 'printf | grep -q' под set -o pipefail. Совершил его В ТЕСТЕ, который проверяет класс shell-дефектов, и тест из-за этого объявлял непокрытыми файлы, которые обход открывает. Метатест test_assert_no_sigpipe этот приём запрещает и поймал бы при прогоне набора — но моя проверка была написана и прочитана как верная."
+  - date: 2026-08-26
+    kind: reinforced
+    reason: "дважды за сессию: инжектор Core написан на Python, а не shell, именно потому что tr/awk на BSD побайтовые и кириллицу не сложат; и мой же проверочный вызов упал на отсутствующем на macOS timeout — код 127 я едва не прочитал как «зависания нет»"
+  - date: 2026-08-26
+    kind: reinforced
+    reason: "правка throttle-lib: проверка уборки в zsh снесла и защищённые семейства, в bash отработала верно — знание направило диагностику на оболочку, а не на правку"
+  - date: 2026-08-27
+    kind: reinforced
+    reason: "26.08 в сессии babbcc5a: sed -n N,+12p — BSD sed на macOS не понимает адресацию ,+N, команда упала (sed: 1: invalid command code ,)"
+    trigger_case: case-2026-08-27-auto-draft-fires-without-an-incident.md
+    session: ""
+  - date: 2026-08-27
+    kind: reinforced
+    reason: "Дважды за ход изменило код: правку теста писал python3, а не head -n -3 (BSD head отрицательный аргумент не берёт); в grep -E признака взял .{0,3} вместо класса с кириллицей и тире, который зависит от локали в BSD grep. Оба раза правило пришло инжектом до написания строки, а не после падения."
+    session: ""
+  - date: 2026-08-28
+    kind: reinforced
+    reason: "bash 3.2 не разбирает case внутри $(); zsh не делит переменную по словам"
+    session: ""
+  - date: 2026-08-28
+    kind: reinforced
+    reason: "Сработало по делу дважды за сессию: отбило timeout (на macOS его нет, вызов вернул бы 127 и прочитался как «прошло без находок») и заставило сверить herestring <<< в новом хуке — сверка показала, что shebang проекта bash и образец rules-write-bypass использует ту же конструкцию, противоречия нет"
+    session: ""
+  - date: 2026-08-29
+    kind: reinforced
+    reason: "отказало вызову timeout при прогоне набора тестов — на macOS его нет, вызов вернул бы 127, и код 127 читался бы как прошло без находок; замена на фоновый запуск сработала"
+    session: ""
+  - date: 2026-08-30
+    kind: reinforced
+    reason: "регэкспы следа вынесены в Onigurama/jq вместо grep: S, b и [^а-яё] у BSD и GNU grep разные; sed с t в BSD не работает — снят до прогона"
+    session: ""
+  - date: 2026-08-31
+    kind: reinforced
+    reason: "D234: правки хуков и тестов писались с BSD/GNU-развилками (date -v/-d), POSIX awk/jq, посекундный -nt bash 3.2 учтён комментарием; тесты зелёные на macOS"
+    session: ""
+  - date: 2026-08-31
+    kind: reinforced
+    reason: "дважды за час: ${PIPESTATUS[0]} под zsh дал пусто; '| tail' съел код выхода run_all.sh — красный набор прочитан как код 0"
+    session: ""
+  - date: 2026-08-31
+    kind: reinforced
+    reason: "вело дизайн to_tokens: байтовый обход отвергнут (ugrep символы / GNU байты), реализация на jq — ровно предписание знания"
+    session: ""
+  - date: 2026-09-03
+    kind: reinforced
+    reason: "Bash-инструмент идёт через zsh: сложные однострочники писались в файл и запускались через bash, разбор — python3/awk/jq. Прямо по знанию поймано и своё нарушение: команда «Проверки» с блочным вводом, схлопнутая в одну строку, стала неисполнимой — страж назвал её «(синтаксис)»."
+    session: ""
+  - date: 2026-09-04
+    kind: reinforced
+    reason: "Отбил мой зонд tr '[:upper:]' '[:lower:]' по кириллице — GNU tr кириллицу не сворачивает ни в какой локали. Зонд был одноразовый, в код не пошёл, но признак сработал верно и на настоящей форме"
+    session: ""
+  - date: 2026-09-08
+    kind: reinforced
+    reason: "8 сентября 2026: знание было верным, а доставка сломана. Три моих нарушения за сессию прошли без подсказки, потому что признак кончался на Edit/MultiEdit/Write, а запись шла heredoc-ом через Bash; ниже предикат области находил цель у 1 команды из 1357. Оба корня починены, сквозная проверка даёт deny на непарном stat -f и молчание на парном."
+    session: ""
+  - date: 2026-09-09
+    kind: reinforced
+    reason: "отказ уровня 4 отбил вызов timeout на macOS: его нет, код 127 читался бы как «прошло без находок». Второе срабатывание — не-ASCII вплотную к подстановке в моём тесте, тоже настоящий дефект"
+    session: ""
+  - date: 2026-09-10
+    kind: reinforced
+    reason: "признак был перечнем ТРЁХ форм при 12 упоминаниях timeout в тексте самого знания — отсюда 15 нарушений за 12 дней при уровне 4; форма добавлена с измеренной точностью (34 срабатывания в 27 сессиях корпуса, ложных нет: команды на BSD нет вовсе)"
+    session: ""
+  - date: 2026-09-12
+    kind: reinforced
+    reason: "41-е: grep в PATH — ugrep, опции после «--» читаются как пути; --include в сканере читателей test_throttle_lib.sh не действовал здесь никогда, на GNU grep в CI действовал — расхождение macOS/Linux незаметное до первого exclude"
+    session: ""
+  - date: 2026-09-12
+    kind: reinforced
+    reason: "скобка [Бб] в awk-программе module-context-inject.sh:101 не совпадает на mawk (побайтовый) — раздел не находился, правила не подавались; поймано замером чистой рамки D404"
+    session: ""
+  - date: 2026-09-13
+    kind: reinforced
+    reason: "BSD awk отверг многострочное значение -v (newline in string), GNU молчал; поймано ногой T6 signal-precision на фикстуре из двух журналов, исправлено вторым входом awk (13 сентября 2026, D383)"
+    session: ""
+  - date: 2026-09-13
+    kind: reinforced
+    reason: "два промаха вне области стражей: awk -v с переводом строки (BSD), кириллический диапазон в переменной (GNU grep C.UTF-8); словарь с двумя движками; щель закрыл сканер по дереву"
+    trigger_case: case-2026-09-13-two-guards-two-scopes-one-gap.md
+    session: ""
+  - date: 2026-09-13
+    kind: reinforced
+    reason: "переменная в кавычках-ёлочках без фигурных скобок трижды в новом свидетеле при известном правиле; поймал test_multibyte_var_boundary, 13 сентября 2026"
+    session: ""
+  - date: 2026-09-13
+    kind: reinforced
+    reason: "Отбил вызов 'timeout 300 bash scripts/measurement-due.sh' — на macOS timeout отсутствует, форма сломалась бы здесь; отказ верный, обошёл без timeout"
+    session: ""
+  - date: 2026-09-16
+    kind: reinforced
+    reason: "голый табулятор в шаблоне case разорвал слово и уронил разбор; BSD sed не понимает альтернацию в BRE — признак был бы мёртв молча"
+    trigger_case: case-2026-09-16-recorded-root-is-a-hypothesis-measured.md
+    session: ""
+  - date: 2026-09-24
+    kind: reinforced
+    reason: "новая измеренная форма: обратная косая внутри скобочного класса sed; различающий замер по четырём инструментам"
+    session: ""
+  - date: 2026-10-03
+    kind: reinforced
+    reason: "D506/D488: только конструкции bash 3.2 (read -u, local -a, подстановки параметров), кириллица токенизируется jq, а не tr; Linux-контейнер (mawk, C.UTF-8) — 34 из 34 и 82 из 83 с прежним сбоем, не от правок"
+    session: ""
+  - date: 2026-10-03
+    kind: reinforced
+    reason: "D509: страж (уже на новом интерпретаторе) отказал ${PIPESTATUS[0]} в моей команде zsh — верное срабатывание"
+    session: ""
+  - date: 2026-10-08
+    kind: reinforced
+    reason: "8 окт 2026: тест хука agent-model-notice — подстановка ${var/шаблон с '/…} совпала в zsh (ручная проверка) и не совпала в bash (тест); шаблон переписан без кавычек"
+    session: ""
+  - date: 2026-10-11
+    kind: reinforced
+    reason: "zsh-модификатор :w в $VAR:web/… молча съел путь git show — замер пробы по пустым снимкам (ProjectA 2026-10-11)"
+    trigger_case: case-2026-10-11-zsh-colon-modifier-ate-path-probe-measured-empty-snapshot.md
+    session: ""
+  - date: 2026-10-19
+    kind: reinforced
+    reason: "сайт projecta.pl 2026-10-19: список спек в $VIS передан без кавычек под zsh — одно слово, «No tests found»; повтор той же грабли, что $FILES ранее в сессии; починка — bash -c с разбиением"
+    session: ""
+  - date: 2026-10-20
+    kind: reinforced
+    reason: "отказ хука спас два вызова: timeout нет на macOS, ${PIPESTATUS} в zsh пуст — заменено на out=$(…); rc=$?"
+    session: ""
+  - date: 2026-10-24
+    kind: reinforced
+    reason: "awk 20200816 в локали UTF-8: substr режет байты при length по знакам, регулярка по обрезку падает (D1044, 52 итога из 474)"
+    trigger_case: case-2026-10-24-awk-substr-cuts-letter-in-utf8-locale.md
+    session: ""
+  - date: 2026-10-24
+    kind: reinforced
+    reason: "24.10 D1048+D1050: не-ASCII внутри [...] в байтовом awk (локаль C хуков) — маркер • не узнавался, «[^»]*» не вырезал цитату с «л»; починено чередованием и однобайтной заменой"
+    session: ""
+  - date: 2026-10-26
+    kind: reinforced
+    reason: "D1140: граница слова [[:space:][:punct:]] в grep зависела от локали — в UTF-8 в класс входят «—», «…», «»», NBSP, в C нет; «D5 закрыт—» под LC_ALL=C молчал. Разбор кириллического слова перенесён в python (юникодные классы), тест под C и UTF-8"
+    session: ""
+  - date: 2026-10-27
+    kind: reinforced
+    reason: "в команде Bash-инструмента под zsh стоял ${PIPESTATUS[0]} — читался бы пустым, переписал на out=$(...); rc=$?"
+    session: ""
+  - date: 2026-10-28
+    kind: reinforced
+    reason: "подсказка non_ascii_adjacent_to_shell_syntax на ногах D1171: bash 3.2 забирал первый байт «»» в имя $RU — сообщение провала печаталось битым; исправлено на ${RU} (test_completion_gate_fresh_items.sh:101,106)"
+    session: ""
+  - date: 2026-10-30
+    kind: reinforced
+    reason: "D1169: heredoc программы Python внутри $( … ) под bash 3.2 разбирается кодом, 2>/dev/null прятал отказ"
+    trigger_case: case-2026-10-28-heredoc-inside-command-substitution-bash32
+    session: ""
+  - date: 2026-10-31
+    kind: reinforced
+    reason: "D1147 круг 4: выражение метки «[без слов пробы]» шло в awk через -v, который разворачивает [ в [ — метка становилась классом байтов (кириллица делит первый байт), говорящий красный с меткой в словах пробы считался молчащим; отказ стража на кириллице в скобках заставил проверить — дефект настоящий, починка через ENVIRON, проверено в трёх локалях и в debian (mawk)"
+    session: ""
+  - date: 2026-11-01
+    kind: reinforced
+    reason: "1.11.2026: два промаха zsh за ход при живом знании (=-расширение, нет разбиения слов)"
+    trigger_case: case-2026-11-01-zsh-slips-recur-despite-six-cases.md
+    session: ""
+  - date: 2026-11-03
+    kind: reinforced
+    reason: "D1200, нога T32 теста name-consumer-notice: bash 3.2 раскрыл {k: v for k, v …} внутри одинарных кавычек, когда скобки стоят между двойными кавычками внутри них и всё во вложенной подстановке $(f $(jq '……{a, b}……')) — содержимое распалось на два аргумента; воспроизведено минимальным скриптом (D/E/F/G), скобки вне вложенных двойных кавычек (probe_D1142.sh:22) не раскрываются; починка — содержимое файлом через --rawfile"
+    session: ""
+  - date: 2026-11-08
+    kind: reinforced
+    reason: "08.11 Biznes-sovetnik: sed 's/</?loc>//g' — BSD sed не знает ? , теги <loc> остались в адресах, curl получил невалидный URL и python упал на отсутствующем файле. Починка — парсинг sitemap в python re"
+    session: ""
+  - date: 2026-11-15
+    kind: reinforced
+    reason: "applicable_not_followed: подсказка non_ascii_adjacent_to_shell_syntax пришла при записи hooks/tests/test_shell_portability_timeout_asks_machine.sh, не применена — «${c}»-форма; bash 3.2 под set -u упал unbound variable, как предсказано (D1302)"
+    session: ""
+  - date: 2026-11-18
+    kind: reinforced
+    reason: "D1315: перечень 196 КБ окружением в python3 — Linux MAX_ARG_STRLEN 128 КБ, macOS без предела; повтор в контейнере"
+    trigger_case: case-2026-11-18-growing-value-through-env-hits-linux-arg-limit.md
+    session: ""
+  - date: 2026-11-18
+    kind: reinforced
+    reason: "D1320: mkdir из uutils (Ubuntu 26.04) неисключителен под гонкой — замки на mkdir не исключали; set -C исключителен на bash 3.2 и 5.3"
+    trigger_case: case-2026-11-18-mkdir-lock-not-exclusive-on-uutils.md
+    session: ""
+fragile: true
+
+# Blocker-tier
+blocker: true
+blocker_reminder: "Команда работает только на одной системе. GNU не знает `date -j`, `stat -f`, `tail -r`, `compgen`; GNU `tr` не сворачивает кириллицу ни в какой локали; GNU grep отвергает диапазон `[а-яё]` в C.UTF-8; `file(1)` отсутствует в минимальных образах. Не-ASCII символ вплотную к синтаксису оболочки: внутри класса `[...]` он читается как диапазон БАЙТОВ, рядом с `$var` — как часть имени переменной. Бери готовое из `hooks/portable-lib.sh` (iso_epoch, file_mtime, to_lower, reverse_lines). Проверяй в контейнере: рецепт в docs/development.md."
+detection_signals: |
+  [
+    {
+      "name": "fails_on_this_machine",
+      "enforcement": "deny",
+      "note": "Перекроен 2026-08-28: прежний единый признак bsd_gnu_divergence_in_bash_command группировал лексемы ПО ТЕМЕ («расхождение BSD/GNU»), а отказ — свойство ПОСЛЕДСТВИЯ. В одну корзину попали `timeout` (на этой машине его нет — вызов падает сейчас) и `date -j` (на macOS работает правильно, ломается только при переносе). Одно поле enforcement не может выразить два разных последствия, поэтому корзина осталась на уровне подсказки — и знание с 29 подтверждениями и 5 замеренными нарушениями продолжало только напоминать. Разнесено по последствию: падает здесь → отказ; работает здесь, не переносится → подсказка; запись такого в файл хука → отказ (ниже). Флаги ниже валятся на BSD и законны на GNU, поэтому признак гейтится предикатом os_is: под Linux он молчит сам, а не выключается руками. Замер по корпусу 2342 вызовов: head -n - 3, compgen -G 1, sed -i голый 16. КОНТРПРИМЕР: `sed -i.bak` не ловится и это известно — он корректен на обеих системах; `sed -i ''` тоже, кавычки снимаются раньше сопоставления. Замер 28 августа 2026 по 2342 прошлым вызовам: первая редакция дала 40 отказов, из них 32 ложных. `sed -i ''` — ВЕРНАЯ форма BSD, а снятие кавычек стирало пустую строку, которая её и отличает; форма цикла внутри тела heredoc пишется в bash-файл, где она законна. Оба вида ложного отказа ушли, когда предикат стал выбирать вид команды под своё утверждение: исполнение смотрит на оболочку без тела heredoc, правильность вызова — на сырой текст. ФОРМА `timeout <число>` СНЯТА 15 ноября 2026 (D1302): она стояла здесь с 10 сентября под предикатом «система BSD», а не под вопросом к машине, и обновление macOS 27.2.1 поставило /usr/bin/timeout — отказ стал ложным. Факт «команды здесь нет» держат два владельца, оба спрашивают машину: признак absent_on_this_machine (command_absent, позиция команды и `$(`) и хук absent-tool-guard.sh. ПРЕДЕЛ: обратные кавычки command_absent не ловит; замер 30 дней — 401 команда с `timeout <число>`, настоящих вызовов в обратных кавычках 0.",
+      "all_of": [
+        {
+          "tool_matches": [
+            "Bash"
+          ]
+        },
+        {
+          "os_is": "bsd"
+        },
+        {
+          "any_of": [
+            {
+              "shell_regex": "(^|[;&|(])[[:space:]]*head[[:space:]]+-n[[:space:]]+-"
+            },
+            {
+              "shell_regex": "(^|[;&|(])[[:space:]]*compgen[[:space:]]+-G"
+            },
+            {
+              "raw_command_regex": "(^|[;&|(])[[:space:]]*sed[[:space:]]+-i[[:space:]]+[^'\\\"[:space:]]"
+            }
+          ]
+        }
+      ],
+      "remedy": "Форма верна на GNU и падает здесь: BSD `head` не берёт отрицательное число, `compgen` — встроенная команда bash и под zsh отсутствует, `sed -i` без аргумента съедает следующий параметр как суффикс. Замены: `head -n -N` → `sed '$d'` или python3; `compgen -G` → обычный глоб с проверкой `[ -e ]`; `sed -i` → `sed -i ''` (BSD) либо `sed -i.bak` (обе системы)."
+    },
+    {
+      "name": "bash_only_form_in_zsh",
+      "enforcement": "deny",
+      "note": "Заведён 10 сентября 2026. Предмет ИНОЙ, чем у fails_on_this_machine: там команды нет в системе, здесь форма есть в bash и отсутствует в оболочке, которой инструмент исполняет команду. Проба в этом инструменте: `echo x | grep -q x; echo ${PIPESTATUS[0]}` печатает ПУСТО, а zsh-форма ${pipestatus[1]} даёт 0. Замер по корпусу 71 536 команд Bash: 286 вхождений в 154 сессиях. Разбор ПО ПОЗИЦИИ (внутри тела heredoc или вне его) даёт 240 настоящих и 10 законных; смешанных нет. ТОЧНОСТЬ 243 из 243, ложных ноль; ПОЛНОТА 243 из 243 — прогнано движком по всем 302 уникальным командам корпуса, а не оценено. Законные классы отсечены поимённо: тело heredoc 45, `bash -c` 8, экранированный доллар 4, фикстуры проб 2. Тело heredoc отбито 0 раз из 14 — то есть законная запись скрипта проходит вся. Прежняя редакция клаузы (10 сентября 2026, первые полчаса) освобождала команду ЦЕЛИКОМ по маркеру `<<EOF` и теряла 38 настоящих из 240; поймано на себе в первый же ход. Позицию формы движок умеет с D79 — предикат `heredoc_body_regex`, — и грубые клаузы были ВТОРОЙ реализацией уже решённого вопроса. НАЗВАННЫЙ ПРЕДЕЛ остаётся один: разделитель здесь ОБОЛОЧКА, а предиката shell_is у движка нет, поэтому на Linux с zsh признак промолчит. ЭКРАНИРОВАННЫЙ доллар (`\\${PIPESTATUS[0]}`) исключён разделителем `(^|[^\\\\])`: он не исполняется по построению оболочки. Класс измерен после первого живого ложного срабатывания — признак отбил команду коммита, где форма стояла в ТЕКСТЕ сообщения: по корпусу вне heredoc живых долларов 252, экранированных 4, и все четыре — упоминания, а не вызовы. Последствие ровно одно и оно молчаливое: статус конвейера не прочитан, подставляется пустая строка — то есть проверка, ради которой строка написана, не выполняется и выглядит успешной. НАЗВАННЫЙ ПРЕДЕЛ: настоящий разделитель — ОБОЛОЧКА, а не ОС, а предиката shell_is у движка нет; на Linux с zsh признак промолчит. Условие снятия: появится предикат оболочки. КОНТРПРИМЕР: `${pipestatus[1]}` (zsh-форма, строчными) под признак не подпадает и обязана проходить.",
+      "all_of": [
+        {
+          "tool_matches": [
+            "Bash"
+          ]
+        },
+        {
+          "any_of": [
+            {
+              "live_command_regex": "(^|[^\\\\])\\$\\{?PIPESTATUS\\[",
+              "note": "Вид `live` (D1040, 24 октября 2026): то, что оболочка раскроет, — `'…'` сняты, содержимое `\"…\"` оставлено. Прежде здесь стоял сырой вид, и форма внутри данных (`python3 -c '…'`, `printf '…' > файл`) давала отказ: 2 из 114 срабатываний корпуса. Одну такую команду до D1039 случайно освобождала клауза тела heredoc — прежний вид тел ошибочно считал строку телом."
+            },
+            {
+              "raw_command_regex": "\\[[[:space:]][^]]*[[:space:]]\"[<>]\"[[:space:]]",
+              "note": "Оператор сравнения в кавычках внутри `[ ]`: 1 вхождение на 71 536 команд, ложных 0. Встроенный `[` в zsh печатает `condition expected: >` и возвращает ЛОЖЬ при любых входах — то есть проверка молча инвертируется. Поймано на себе 10 сентября 2026: замер «0 записей после починки» был неверен, страж выглядел мёртвым."
+            }
+          ]
+        },
+        {
+          "none_of": [
+            {
+              "command_uses": "bash -c"
+            },
+            {
+              "command_uses": "#!/bin/bash"
+            },
+            {
+              "command_uses": "#!/usr/bin/env bash"
+            },
+            {
+              "heredoc_body_regex": "\\$\\{?PIPESTATUS\\[|\\[[[:space:]][^]]*[[:space:]]\"[<>]\"[[:space:]]",
+              "note": "Позиция формы, а не её присутствие. Движок умеет это с D79 (`heredoc_body_regex` — тело heredoc, то есть код, который исполнит ДРУГАЯ оболочка), и до 10 сентября 2026 здесь стояли две грубые клаузы `raw_command_regex`, освобождавшие команду ЦЕЛИКОМ по одному маркеру `<<EOF`. Замер по корпусу: они теряли 38 настоящих дефектов из 240 — форма, стоящая РЯДОМ с записью скрипта, читается здешней оболочкой и падает. Команд, где форма есть и в теле, и снаружи, в корпусе НЕТ (0 из 250), потому клауза точна; появись такая — она освободит команду целиком, и это названный предел."
+            }
+          ]
+        }
+      ],
+      "remedy": "`${PIPESTATUS[N]}` в zsh не существует — читается пустая строка. Замены: `set -o pipefail; cmd1 | cmd2; rc=$?` (кодом станет первый ненулевой), либо zsh-форма `${pipestatus[1]}` строчными, либо `out=$(cmd1); rc=$?` без конвейера. Оператор `[ \"$a\" \">\" \"$b\" ]` заменяется на `[[ \"$a\" > \"$b\" ]]`, `expr`, `awk` или сортировку. Обе формы законны внутри `bash -c`, шебанга и при ЗАПИСИ скрипта в файл — эти случаи признак не трогает."
+    },
+    {
+      "name": "absent_on_this_machine",
+      "enforcement": "deny",
+      "note": "Правило о МИРЕ, а не о тексте: исполняемого нет на PATH, значит вызов падает кодом 127 здесь и сейчас. На машине, где инструмент есть, признак молчит сам. Повод: `timeout` — 6 вызовов на корпус в 2342, и один раз код 127 был почти прочитан как «зависания нет» (provenance 2026-08-26). КОНТРПРИМЕР: имя инструмента, взятое из переменной или из строки-аргумента, не ловится — сопоставление идёт по раскавыченной команде. Пять имён добавлены 10 сентября 2026 после проверки `command -v` на этой машине: tac, gsed, gdate, gtimeout, pcregrep — все отсутствуют, тогда как realpath, file и seq есть и признак на них молчит сам. Замер по корпусу: `tac` — 15 сырых вхождений, 1 на виде команды и оно настоящее; у остальных четырёх на виде признака 0, то есть НЕ ИЗМЕРЕНО, и это записано честно — риск ложности нулевой по построению предиката, а не по замеру.",
+      "all_of": [
+        {
+          "tool_matches": [
+            "Bash"
+          ]
+        },
+        {
+          "any_of": [
+            {
+              "command_absent": "timeout"
+            },
+            {
+              "command_absent": "sponge"
+            },
+            {
+              "command_absent": "realpath"
+            },
+            {
+              "command_absent": "tac"
+            },
+            {
+              "command_absent": "gsed"
+            },
+            {
+              "command_absent": "gdate"
+            },
+            {
+              "command_absent": "gtimeout"
+            },
+            {
+              "command_absent": "pcregrep"
+            }
+          ]
+        }
+      ],
+      "remedy": "Названного инструмента нет на этой машине — вызов вернёт 127, и код 127 легко прочитать как «прошло без находок». Замены: вместо timeout — фоновый запуск с проверкой живости либо `perl -e 'alarm N; exec @ARGV'`; вместо realpath — `cd … && pwd -P` или python3; вместо sponge — временный файл и mv."
+    },
+    {
+      "name": "zsh_no_word_split_in_for_list",
+      "enforcement": "deny",
+      "note": "Список for состоит РОВНО из одного простого раскрытия параметра. Под zsh — а Bash-инструмент Claude Code на macOS это zsh — такой цикл проходит ОДИН раз целой строкой; под bash делится по словам. Ошибка молчит: не падает, а даёт неверный ответ. Замер 28 августа 2026 по корпусу в 2342 вызова: форма встретилась 9 раз, из них 6 внутри `bash -c` (там верно) и 3 снаружи — все три оказались настоящими дефектами, один дал 125 ложных «неописанных» файлов вместо 19. Точность 3 из 3 на отказ, поэтому отказ. КОНТРПРИМЕР: `for x in $(cmd)` НЕ ловится и это известно — подстановку команды zsh делит, форма законна; смешанный список с глобом (`*${X}*`) тоже пропускается. Признак читает ТОЛЬКО то, что исполняет оболочка: та же форма в теле heredoc уезжает в bash-файл и там верна — 18 ложных отказов замера пришлись ровно на это.",
+      "all_of": [
+        {
+          "tool_matches": [
+            "Bash"
+          ]
+        },
+        {
+          "os_is": "bsd"
+        },
+        {
+          "shell_regex": "for[[:space:]]+[A-Za-z_][A-Za-z0-9_]*[[:space:]]+in[[:space:]]+\\$\\{?[A-Za-z_][A-Za-z0-9_]*\\}?[[:space:]]*(;|do|$)"
+        },
+        {
+          "none_of": [
+            {
+              "command_uses": "bash -c"
+            },
+            {
+              "command_uses": "#!/usr/bin/env bash"
+            },
+            {
+              "command_uses": "#!/bin/bash"
+            }
+          ]
+        }
+      ],
+      "remedy": "Bash-инструмент на macOS — это zsh, а zsh НЕ делит простое раскрытие параметра по словам: цикл пройдёт один раз всей строкой. Ошибка не падает, а даёт неверный ответ. Замены: обернуть в `bash -c '…'`; либо `for x in ${(z)VAR}` (zsh); либо хранить список в массиве и раскрывать явно; либо `printf '%s\\n' $VAR | while read -r x`."
+    },
+    {
+      "name": "works_here_breaks_elsewhere",
+      "note": "Перекроен 2026-08-28: прежний единый признак bsd_gnu_divergence_in_bash_command группировал лексемы ПО ТЕМЕ («расхождение BSD/GNU»), а отказ — свойство ПОСЛЕДСТВИЯ. В одну корзину попали `timeout` (на этой машине его нет — вызов падает сейчас) и `date -j` (на macOS работает правильно, ломается только при переносе). Одно поле enforcement не может выразить два разных последствия, поэтому корзина осталась на уровне подсказки — и знание с 29 подтверждениями и 5 замеренными нарушениями продолжало только напоминать. Разнесено по последствию: падает здесь → отказ; работает здесь, не переносится → подсказка; запись такого в файл хука → отказ (ниже). Здесь остались формы, которые на macOS ВЕРНЫ: date -j, stat -f, tail -r. Отказывать в них нельзя — это правильный способ спросить время и права на этой машине. Уровень подсказки тут и есть верный уровень: беда наступает не при вызове, а при записи такой формы в файл, и на записи стоит отдельный отказ (bsd_gnu_token_written_into_hook_file). КОНТРПРИМЕР: вызов из скрипта, который поедет в контейнер, ничем не отличается от разового — признак этого не видит.",
+      "all_of": [
+        {
+          "tool_matches": [
+            "Bash"
+          ]
+        },
+        {
+          "any_of": [
+            {
+              "command_uses": "date -j"
+            },
+            {
+              "command_uses": "stat -f"
+            },
+            {
+              "command_uses": "tail -r"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "cyrillic_case_folding_by_tr",
+      "all_of": [
+        {
+          "tool_matches": [
+            "Edit",
+            "MultiEdit",
+            "Write",
+            "Bash"
+          ]
+        },
+        {
+          "any_of": [
+            {
+              "file_path_regex": "(^|/)(hooks|scripts)/.*\\.sh$"
+            },
+            {
+              "tool_input_regex": "(hooks|scripts)/[^ ]*\\.(sh|bash)"
+            }
+          ]
+        },
+        {
+          "any_of": [
+            {
+              "tool_input_contains": "[:upper:]"
+            },
+            {
+              "tool_input_regex": "LC_ALL=C[^|;]*tr[ ]+-c"
+            },
+            {
+              "heredoc_body_regex": "LC_ALL=C[^|;]*tr[ ]+-c"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "non_ascii_adjacent_to_shell_syntax",
+      "all_of": [
+        {
+          "tool_matches": [
+            "Edit",
+            "MultiEdit",
+            "Write"
+          ]
+        },
+        {
+          "file_path_regex": "(^|/)(hooks|scripts)/.*\\.(sh|bash)$"
+        },
+        {
+          "any_of": [
+            {
+              "tool_input_regex": "(sed|grep|tr).*\\[[^]]*([^ -~]|\\\\u[0-9a-fA-F]{4})"
+            },
+            {
+              "tool_input_regex": "\\$\\{?[A-Za-z_][A-Za-z0-9_]*([^ -~]|\\\\u[0-9a-fA-F]{4})"
+            },
+            {
+              "tool_input_regex": "\\[[^]]*\\\\+[xdwsSWD]"
+            }
+          ]
+        }
+      ],
+      "note": "Сужен и раздвоен 8 сентября 2026. (а) СУЖЕНИЕ: из формы убрана закрывающая фигурная скобка — `${R}»` безопасен, скобка терминирует имя, и ловить его значило звать ложное. Замер по 313 записям в hooks|scripts/*.sh из корпуса: прежняя форма 50 совпадений, суженная 14; все 36 разошедшихся несут скобки, то есть были ложными. (б) РАЗДВОЕНИЕ: см. близнеца non_ascii_adjacent_to_shell_syntax_written_via_shell."
+    },
+    {
+      "name": "non_ascii_adjacent_to_shell_syntax_written_via_shell",
+      "note": "Заведён 8 сентября 2026. Повод: за одну сессию я трижды написал `«$R»` в файл под hooks/ и ни разу не получил подсказки — потому что писал heredoc'ом через Bash, а область признака кончалась на Edit/MultiEdit/Write. Дробь: у знания три признака про ЗАПИСЬ в файл, и два из них (bsd_gnu_token_written_into_hook_file, bsd_only_command_written_via_shell) близнеца на Bash уже имели — этот не имел. M = 1 из 3, разделитель назван: у BSD/GNU-класса вариант «written_via_shell» завели 28 августа, у не-ASCII класса забыли. Замер 2026-08-26 стоит в самом движке: 45% правок файлов идут командами оболочки, то есть признак был выключен на половине записей ПО ПОСТРОЕНИЮ. ТОЧНОСТЬ ИЗМЕРЕНА по корпусу: население 313 записей в hooks|scripts/*.sh, совпадений 14 (4,5%), из них настоящих дефектов 11. Три ложных — фикстуры тестов, которые пишут дефект НАРОЧНО (test_multibyte_var_boundary.sh, test_predicate_signal.sh); это ровно тот предел, что уже назван у heredoc_body_regex: отличить подпись от вызова по тексту нельзя. Поэтому уровень — подсказка, а не отказ, как и у близнеца на Edit. КОНТРПРИМЕР: `«${R}»` не ловится и не должен — скобка терминирует имя. Комментарии снимаются движком (ds_code_only), поэтому строка, ДЕМОНСТРИРУЮЩАЯ дефект, признаком не считается; в дереве та же роль у пометки mb-ok. ПОПЫТКА 14 сентября 2026 (D415) ОТМЕНЕНА замером: форму «оболочечный вызов + диапазон не-ASCII» добавлять сюда не нужно — её несёт СОСЕД bsd_only_command_written_via_shell, и нёс до поломки CI (проверено срезом 266c142^). Настоящая дыра иная и измерена: из 77 команд окна, пишущих в hooks|scripts, признак ВИДИТ 20, а 57 (74%) пишут через python внутри heredoc — цель heredoc у них stdin питона, путь лежит в теле, и heredoc_target_regex не совпадает по построению.",
+      "all_of": [
+        {
+          "tool_matches": [
+            "Bash"
+          ]
+        },
+        {
+          "heredoc_target_regex": "(hooks|scripts)/[^ ]*\\.(sh|bash)"
+        },
+        {
+          "heredoc_body_regex": "\\$[A-Za-z_][A-Za-z0-9_]*[^ -~]"
+        }
+      ],
+      "remedy": "bash 3.2 (системный на macOS) при разборе `\"$var»\"` включает первый байт кавычки-ёлочки в имя переменной и под `set -u` выходит с «unbound variable». Починка: `${var}`. Если строка ДЕМОНСТРИРУЕТ дефект — пометь её `mb-ok`. Тот же класс сверяет hooks/tests/test_multibyte_var_boundary.sh по всему дереву."
+    },
+    {
+      "name": "bsd_gnu_token_written_into_hook_file",
+      "enforcement": "deny",
+      "note": "Отказ, а не напоминание (2026-08-28, поправка собеседника «нужен стопор, который будет заставлять»). Мишень узкая и измеренная: за шесть сессий 10 команд записали такой признак в файл под hooks|scripts против 35 разовых команд на своей машине. Разовые остаются с тихим напоминанием — запускать stat -f на macOS не ошибка; ошибка — класть его в файл, который поедет на другую систему. Область признака 28 августа 2026 переведена с tool_input_regex на heredoc_target_regex: прежняя горела на ЛЮБОМ пути hooks/…sh в команде, включая путь запускаемого стража, и первый же живой отказ пришёл на запись пробника в песочницу. Предмет проверки — файл, который создаётся, а не то, что упомянуто рядом. ДОПОЛНЕНО 8 сентября 2026, после починки разбора цели heredoc. До неё предикат heredoc_target_regex находил цель у 1 команды из 1357 — отказ был выключен по построению, и его точность мерить было не на чем. На расслеплённом населении (128 записей в hooks|scripts/*.sh) он дал 3 срабатывания, и ВСЕ ТРИ ложные: test_stat_flag_order.sh и portable-lib.sh несут BSD-форму С парной GNU-веткой (то есть переносимую), test_bsd_forms_paired.sh — сам страж, ищущий эту форму. Разделитель назван и механически проверяем: парная ветка в том же теле. Отказ с ложными срабатываниями обязан снова становиться подсказкой, поэтому вместо понижения уровня добавлен none_of — после него ложных ноль из трёх при сохранённом отказе на непарной форме. НАЗВАННЫЙ ПРЕДЕЛ: none_of смотрит ВСЁ тело, поэтому парная ветка в другой функции того же файла тоже снимет отказ. Условие снятия: появится разбор тела по областям видимости. СУЖЕН 15 сентября 2026 по слову владельца: цель под tests/ из отказа исключена. Повод — замер того же дня: починка разбора (D415) дала 38 новых срабатываний, и 21 из них целит в ФАЙЛ ТЕСТА, где дефект пишется НАРОЧНО как фикстура. Последствие там иное и это уже доктрина реестра родов (род A): в хуке BSD-токен ломает тихо на Linux, в тесте падает громко на CI. Признак уровня отказа обязан иметь ОДНО последствие. КОНТРПРИМЕР предела: команда, пишущая в один ход и тест, и рабочий файл, будет пропущена целиком — таких в корпусе не найдено, но предел назван. ПЕРЕКРОЕН 15 сентября 2026. Первая редакция сужения гасила команду целиком, если хоть одна её цель — тест (none_of); замер тут же показал цену: из 17 настоящих отказов осталось 8, потому что правка хука и его теста обычно идёт ОДНОЙ командой. Мой «названный предел» оказался населённым, и это поймано замером, а не рассуждением. Теперь тесты исключены УСТРОЙСТВОМ пути: цель обязана быть файлом рабочего кода (каталоги названы), и команда, пишущая разом хук и тест, отказывает по хуку. КОНТРПРИМЕР: `hooks/tests/test_x.sh` не цель — там дефект пишется фикстурой нарочно и падает громко на CI, а не тихо в мире. ПРЕДЕЛ: каталоги перечислены, новый каталог рабочего кода признак не увидит, пока его не добавят.",
+      "all_of": [
+        {
+          "tool_matches": [
+            "Bash"
+          ]
+        },
+        {
+          "heredoc_target_regex": "(hooks/(lib/)?|scripts/(ablation/|probes/|publish/)?)[^ /]*[.](sh|bash|py)"
+        },
+        {
+          "any_of": [
+            {
+              "heredoc_body_regex": "(^|[|;&(]|[[:space:]])date -j"
+            },
+            {
+              "heredoc_body_regex": "(^|[|;&(]|[[:space:]])stat -f"
+            },
+            {
+              "heredoc_body_regex": "(^|[|;&(]|[[:space:]])tail -r"
+            },
+            {
+              "heredoc_body_regex": "(^|[|;&(]|[[:space:]])compgen -G"
+            },
+            {
+              "heredoc_body_regex": "(^|[|;&(]|[[:space:]])timeout "
+            },
+            {
+              "heredoc_body_regex": "head -n -"
+            },
+            {
+              "heredoc_body_regex": "sed -i[[:space:]]"
+            }
+          ]
+        },
+        {
+          "none_of": [
+            {
+              "heredoc_body_regex": "stat -c"
+            },
+            {
+              "heredoc_body_regex": "date -d"
+            },
+            {
+              "heredoc_body_regex": "(^|[^a-z])tac([^a-z]|$)"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "bsd_only_command_written_via_shell",
+      "enforcement": "deny",
+      "all_of": [
+        {
+          "tool_matches": [
+            "Bash"
+          ]
+        },
+        {
+          "heredoc_target_regex": "(hooks/(lib/)?|scripts/(ablation/|probes/|publish/)?)[^ /]*[.](sh|bash|py)"
+        },
+        {
+          "any_of": [
+            {
+              "heredoc_body_regex": "(sed|grep|tr).*\\[[^]]*([^ -~]|\\\\u[0-9a-fA-F]{4})"
+            },
+            {
+              "heredoc_body_regex": "\\[[^]]*\\\\+[xdwsSWD]"
+            }
+          ]
+        }
+      ],
+      "note": "Область признака 28 августа 2026 переведена с tool_input_regex на heredoc_target_regex: прежняя горела на ЛЮБОМ пути hooks/…sh в команде, включая путь запускаемого стража, и первый же живой отказ пришёл на запись пробника в песочницу. Предмет проверки — файл, который создаётся, а не то, что упомянуто рядом. СУЖЕНО 8 сентября 2026: из 3 форм убрана одна — подстановка вплотную к не-ASCII. Она про другой класс, чем говорит имя признака, и именно она давала ложные ОТКАЗЫ на фикстурах тестов, которые пишут дефект нарочно (test_multibyte_var_boundary.sh). Класс не потерян: он ведётся подсказкой non_ascii_adjacent_to_shell_syntax_written_via_shell, где фикстура стоит напоминанием, а не отказом. Оставшиеся формы — классы символов в sed/grep/tr — на расслеплённом населении (128 записей) дают 3 срабатывания, ложных среди них не опознано. СУЖЕН 15 сентября 2026 по слову владельца: цель под tests/ из отказа исключена. Повод — замер того же дня: починка разбора (D415) дала 38 новых срабатываний, и 21 из них целит в ФАЙЛ ТЕСТА, где дефект пишется НАРОЧНО как фикстура. Последствие там иное и это уже доктрина реестра родов (род A): в хуке BSD-токен ломает тихо на Linux, в тесте падает громко на CI. Признак уровня отказа обязан иметь ОДНО последствие. КОНТРПРИМЕР предела: команда, пишущая в один ход и тест, и рабочий файл, будет пропущена целиком — таких в корпусе не найдено, но предел назван. ПЕРЕКРОЕН 15 сентября 2026. Первая редакция сужения гасила команду целиком, если хоть одна её цель — тест (none_of); замер тут же показал цену: из 17 настоящих отказов осталось 8, потому что правка хука и его теста обычно идёт ОДНОЙ командой. Мой «названный предел» оказался населённым, и это поймано замером, а не рассуждением. Теперь тесты исключены УСТРОЙСТВОМ пути: цель обязана быть файлом рабочего кода (каталоги названы), и команда, пишущая разом хук и тест, отказывает по хуку. КОНТРПРИМЕР: `hooks/tests/test_x.sh` не цель — там дефект пишется фикстурой нарочно и падает громко на CI, а не тихо в мире. ПРЕДЕЛ: каталоги перечислены, новый каталог рабочего кода признак не увидит, пока его не добавят."
+    }
+  ]
+# Escalation (demand зафиксирован 2026-06-21, без инкремента confirmed — двойной учёт)
+escalation_mechanism_needed: false   # закрыто 2026-07-29: поднят до blocker-tier с измеренными сигналами
+escalation_hint: "2026-06-21 (ClaudSoul, сессия f7715c0f): собеседник прямо требует инженерного решения — «кавычки в zsh постоянно возникающая проблема практически везде, с ней нужно что-то делать. При активации в другом проекте …». Второе+ напоминание о том же правиле = знание не держится на уровне text rule (см. principle-knowledge-in-the-world). Кандидат на blocker-tier / activator: detection_signals на Bash с read -ra / -a / небезопасным quoting → inject напоминания об обёртке bash -c. confirmed_count НЕ инкрементирован: проявление из той же сессии, что уже в source_cases (case-2026-06-20-zsh-nested-quotes, case-2026-06-21-grep-is-ugrep-not-gnu)."
+instrument_verdict: covered   # подсказка уровня 3 написания не меняет (6 нарушений за 30 дней по журналу исходов); класс держат тесты дерева реестра «всегда» — test_multibyte_var_boundary (подстановка вплотную к не-ASCII), test_cyrillic_range_portable (диапазон кириллицы в классе), test_case_folding_portable (свёртка регистра) — и отказ absent-tool-guard (нет timeout); отказ на записи по форме строки бил бы законные демонстрации (метка mb-ok)
+instrument_assessed: 2026-11-10
+---
+
+## Правило
+
+В коде хуков (`*-lib.sh`, `*.sh`) и в командах, которые скилл просит выполнить, **не полагайся на семантику конкретной оболочки**. Среда исполнения не гарантирована: Bash-инструмент Claude Code на macOS — это zsh (`$SHELL=/bin/zsh`), а sourced-библиотека может быть подключена в bash, zsh или хост-шеле.
+
+Конкретно избегать (или оборачивать в `bash -c '...'`):
+- `read -ra` / `read -a` — массивы (в zsh: `bad option: -a`)
+- word-splitting unquoted скаляра (`for x in $var`) — в zsh `SH_WORD_SPLIT` выключен по умолчанию
+- bash-массивы `${arr[@]}`, `mapfile`, `local -n`
+- `[[ ... ]]` с regex-семантикой bash
+- слово, начинающееся с `=` без кавычек (`echo ===X`, `echo ==`): в zsh опция `EQUALS` разворачивает `=cmd` в путь команды → `=X not found`, и вся составная команда падает. Разделители вывода — только в кавычках: `echo '--- X'`
+
+**Делегируй парсинг в `jq` / `awk` / `sed`** — они одинаковы во всех оболочках.
+
+## Why (два проявления)
+
+1. **2026-04-21** — реализация `detection-signals-lib.sh` (blocker-tier): `for t in $allowed` полагался на bash word-splitting, в zsh не разбивал → тест падал. Мета-ирония: сбой при имплементации защиты от `pattern-inside-out-blindness`.
+2. **2026-06-14** — команда поиска корней в процедуре `/compile` v1.1.0: `IFS=':' read -ra _r` → `bad option: -a` в zsh, массив пуст, `find` нашёл 0 файлов. Поймано тестом до записи в скилл (verify-before-acting).
+
+3. **2026-06-21** — фильтрация вывода тестов через `grep -vE` со сложным ERE (литеральные `{`/`}`): дважды `ugrep: invalid repeat/syntax`. Системный `grep` на машине — **ugrep**, не GNU grep; ugrep строг к ERE (малформленный интервал `{` отвергает, GNU трактует как литерал). Вывод тестов терялся в умершем пайпе. Расширяет правило за рамки оболочки — на **идентичность CLI-инструмента**: имя `grep` это тоже бренд, не спецификация реализации. См. `case-2026-06-21-grep-is-ugrep-not-gnu.md`.
+
+4. **2026-10-28** — Biznes-sovetnik, сессия 03fd4817: разделители `echo ===REF`, `echo ====ASSETS` в составных поисковых командах. В zsh `EQUALS` превратил их в поиск команды `REF`/`=ASSETS` → `not found`, exit 1. Дважды подряд, хотя знание было подано активатором в начале сессии: внимание было на содержимом поиска, а не на обвязке вывода. Ловушка в правилах выше не была названа — дописана строкой в список «избегать».
+
+Общий корень — `pattern-inside-out-blindness`: фокус на внутренней логике команды, слепота к внешнему контейнеру (в какой оболочке/каким бинарём она исполняется). Имя «Bash tool» / «grep» — бренд, не спецификация.
+
+## How to apply
+
+- Любую команду со встроенными массивами/word-splitting — либо POSIX-переносимо, либо `bash -c '...'`.
+- Перед тем как положиться на семантику shell — проверь среду один раз: `echo $SHELL; echo $ZSH_VERSION`.
+- Команду для скилла/хука **тестируй до** записи как «готово».
+- Парсинг структур — через `jq`/`awk`, не через shell-конструкции.
+
+## Limitations
+
+- Простые POSIX-команды (`grep`, `sed`, `find`, пайпы) с **простыми** паттернами переносимы. НО (уточнено 2026-06-21): сам бинарь `grep` может быть **ugrep** (строгий ERE) — сложный ERE с литеральными `{`/`}` или нестандартными конструкциями падает там, где GNU grep толерантен. Для извлечения сводки используй фиксированные подстроки (`grep -E "стр1|стр2"`) или читай сохранённый файл; литеральные скобки экранируй (`\{`); структуры парси `jq`/`awk`.
+- Внутри явного `#!/bin/bash` скрипта, запускаемого как файл (а не source/Bash-инструмент), bash-семантика гарантирована — правило про неопределённую среду, не про любой bash-код.

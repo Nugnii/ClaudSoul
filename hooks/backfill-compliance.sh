@@ -1,0 +1,299 @@
+#!/usr/bin/env bash
+# backfill-compliance.sh — восстановить ЗАВИСИМУЮ ПЕРЕМЕННУЮ из архивных транскриптов.
+# en: restores the DEPENDENT VARIABLE from archived transcripts (offline, read-only).
+#
+# НЕ хук. Разовый офлайн-прогон, читает только транскрипты, не трогает живое состояние.
+#
+#   bash hooks/backfill-compliance.sh --dry-run          # посчитать транскрипты
+#   bash hooks/backfill-compliance.sh --limit 20         # частичный прогон
+#   bash hooks/backfill-compliance.sh --class A          # только класс A
+#   bash hooks/backfill-compliance.sh                    # полный прогон
+#   bash hooks/backfill-compliance.sh --report           # кросс-таб по собранному
+#   bash hooks/backfill-compliance.sh --verify-log       # ГЕЙТ: round-trip против логов
+#   bash hooks/backfill-compliance.sh --live             # живой журнал реакций response-<SID>.jsonl (замер response-coverage)
+#
+# Порядок применения: --verify-log → полный прогон → --report. Пока round-trip не
+# сходится, остальное считать бессмысленно: парсер может выдумывать события.
+#
+# Отчёт НЕ считает p-value намеренно. Наблюдения кластеризованы по (сессия, файл):
+# на первом прогоне (25 июля 2026) 70% событий пришлись на четыре документа одного
+# проекта, и наивный бином завысил бы значимость (оценка на тот прогон — примерно вдвое,
+# машинного носителя у неё нет). Кластерные ошибки — работа аналитика, не скрипта.
+
+set -uo pipefail
+
+HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+WORKER="$HOOKS_DIR/lib/backfill-compliance-one.py"
+PROJECTS_DIR="${BACKFILL_PROJECTS_DIR:-$HOME/.claude/projects}"
+OUT_FILE="${COMPLIANCE_OUT:-$HOME/.claude/hooks/state/compliance-backfill.jsonl}"
+STATE_DIR="${STATE_DIR:-$HOME/.claude/hooks/state}"
+PARALLEL="${COMPLIANCE_PARALLEL:-4}"
+CLASSES="${COMPLIANCE_CLASSES:-A,B,C}"
+
+DRY_RUN=false
+LIMIT=""
+REPORT_ONLY=false
+VERIFY_LOG=false
+LIVE=false
+
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --dry-run) DRY_RUN=true; shift ;;
+        --limit)   LIMIT="${2:-}"; shift 2 ;;
+        --class)   CLASSES="${2:-A,B,C}"; shift 2 ;;
+        --report)  REPORT_ONLY=true; shift ;;
+        --verify-log) VERIFY_LOG=true; shift ;;
+        --live) LIVE=true; shift ;;
+        *) echo "неизвестный аргумент: $1" >&2; exit 2 ;;
+    esac
+done
+
+# --- Живой журнал реакций (13 сентября 2026, D383, корень R2): читатель response-<SID>.jsonl ---
+# Трекер hooks/response-tracker.sh пишет ПЕРВУЮ реакцию на каждый новый стимул (запись
+# blocker-fired либо инжект знания). До этого дня журнал не читал никто: предмет записи был шире
+# предмета утверждения на 99,9%, и читателя ему не находилось; после сужения (10 сентября) он
+# несёт предмет — и здесь читается. Это тот же предмет, что восстанавливает офлайн-реплей ниже,
+# только из живого журнала и без транскриптов, поэтому режим стоит здесь, а не отдельным файлом.
+# Код: 0 — реакции записываются; 1 — стимулы есть, а реакций нет ни в одной сессии (трекер
+# мёртв — регистрация или паника под set -u); 2 — стимулов нет (замерять нечего, и это не
+# «трекер работает»). Стимулом здесь считается сессия с blocker-fired: реакции на инжект знания
+# в журнал тоже попадают и считаются в распределении, но сессий-стимулов по ним не выводится —
+# маркер инжекта одноразовый и по срокам чистится.
+if [ "$LIVE" = true ]; then
+    command -v jq >/dev/null 2>&1 || { echo "нужен jq — не измерено"; exit 2; }
+    echo "=== Живые реакции: response-<SID>.jsonl против стимулов blocker-fired-<SID>.jsonl ==="
+    # СЕССИЯ СЧИТАЕТСЯ ОДИН РАЗ, а суффикс актора снимается (D457, 18 сентября 2026).
+    # С появлением журналов актора (`blocker-fired-<sid>.agent-<id>.jsonl`) у одной сессии
+    # стало НЕСКОЛЬКО файлов стимула: счёт по файлам раздул бы знаменатель, а sid, взятый
+    # из имени вместе с суффиксом, не нашёл бы `response-<sid>.jsonl` и занизил бы числитель.
+    STIM=0; WITH=0; _seen_sids=""
+    for log in "$STATE_DIR"/blocker-fired-*.jsonl; do
+        [ -s "$log" ] || continue
+        sid=$(basename "$log" .jsonl); sid="${sid#blocker-fired-}"; sid="${sid%%.agent-*}"
+        case " $_seen_sids " in *" $sid "*) continue ;; esac
+        _seen_sids="$_seen_sids $sid"
+        STIM=$((STIM + 1))
+        [ -s "$STATE_DIR/response-${sid}.jsonl" ] && WITH=$((WITH + 1))
+    done
+    _resp=$(cat "$STATE_DIR"/response-*.jsonl 2>/dev/null | jq -rRc 'fromjson? // empty' 2>/dev/null)
+    RESP_LINES=$(printf '%s\n' "$_resp" | awk 'NF { c++ } END { print c + 0 }')
+    echo "сессий со стимулом блокера: $STIM, из них с записанной реакцией: $WITH"
+    echo "записей реакций всего: $RESP_LINES"
+    if [ "$RESP_LINES" -gt 0 ]; then
+        echo "первые реакции по виду стимула:"
+        printf '%s\n' "$_resp" | jq -r '.after // "?"' | sort | uniq -c | sort -rn | awk '{ printf "  %-10s %s\n", $2, $1 }'
+        echo "первые реакции по инструменту:"
+        printf '%s\n' "$_resp" | jq -r '.tool // "?"' | sort | uniq -c | sort -rn | head -8 | awk '{ printf "  %-12s %s\n", $2, $1 }'
+    fi
+    if [ "$STIM" -eq 0 ] && [ "$RESP_LINES" -eq 0 ]; then echo "стимулов нет — замерять нечего"; exit 2; fi
+    if [ "$STIM" -gt 0 ] && [ "$WITH" -eq 0 ]; then
+        echo "⚠️ стимулы есть, реакций нет ни в одной сессии — трекер реакций не пишет (регистрация? паника под set -u?)"
+        exit 1
+    fi
+    exit 0
+fi
+
+# --- Preflight ---
+[ -f "$WORKER" ] || { echo "воркер не найден: $WORKER" >&2; exit 1; }
+command -v python3 >/dev/null 2>&1 || { echo "нужен python3" >&2; exit 1; }
+command -v jq >/dev/null 2>&1 || { echo "нужен jq" >&2; exit 1; }
+# Режим --report читает УЖЕ собранный отчёт, транскрипты ему не нужны: на машине без
+# ~/.claude/projects (CI) проверка каталога роняла отчёт раньше, чем он открыл файл (T17a/b).
+[ "$REPORT_ONLY" = true ] || [ -d "$PROJECTS_DIR" ] || { echo "нет каталога транскриптов: $PROJECTS_DIR" >&2; exit 1; }
+
+# Абсолютные пути обязательны: имена проектных каталогов начинаются с «-»
+# («-Users-user-My-Project-ClaudSoul»), относительный путь jq/python примут за флаг.
+TRANSCRIPTS=$(find "$PROJECTS_DIR" -name "*.jsonl" -type f 2>/dev/null | sort)
+COUNT=$(printf '%s\n' "$TRANSCRIPTS" | grep -c '.') || COUNT=0
+if [ -n "$LIMIT" ]; then
+    TRANSCRIPTS=$(printf '%s\n' "$TRANSCRIPTS" | head -n "$LIMIT")
+    COUNT=$(printf '%s\n' "$TRANSCRIPTS" | grep -c '.') || COUNT=0
+fi
+
+# --- Режим отчёта: только читает уже собранное ---
+report() {
+    [ -s "$OUT_FILE" ] || { echo "нет данных: $OUT_FILE" >&2; exit 1; }
+    echo "=== Класс A: блокер long_lived_markdown_doc_edit ==="
+    echo "Единица — интервал между двумя правками одного файла. FRESH = после маркера."
+    echo "Три критерия печатаются вместе намеренно: это межкритериальное согласие вместо"
+    echo "второго кодировщика. Вывод, выживающий только под одним из трёх, — артефакт границы."
+    echo "  loose  — было любое чтение того же файла"
+    echo "  main   — чтение целиком (без offset/limit), как просит blocker_reminder"
+    echo "  strict — чтение целиком ДО любой другой правки в интервале"
+    echo ""
+    printf '%-16s %-8s %6s %7s %7s %7s %8s\n' "плечо" "экспозиц" "n" "loose" "main" "strict" "кластеров"
+    jq -rs '
+      [ .[] | select(.cls=="A" and .outcome != "na") ]
+      | group_by([.arm, .exposure])
+      | .[]
+      | { arm: .[0].arm, exp: .[0].exposure, n: length,
+          lo: ([.[] | select(.v_loose == true)] | length),
+          mn: ([.[] | select(.v_main  == true)] | length),
+          st: ([.[] | select(.v_strict == true)] | length),
+          cl: ([.[].cluster] | unique | length) }
+      | "\(.arm)\t\(.exp)\t\(.n)\t\(.lo)\t\(.mn)\t\(.st)\t\(.cl)"
+    ' "$OUT_FILE" 2>/dev/null | while IFS=$'\t' read -r a e n lo mn st cl; do
+        pl=$([ "$n" -gt 0 ] && echo "$((lo * 100 / n))%" || echo "-")
+        printf '%-16s %-8s %6s %4s%-3s %7s %7s %8s\n' "$a" "$e" "$n" "$lo" " ($pl)" "$mn" "$st" "$cl"
+    done
+    NA=$(jq -rs '[.[]|select(.cls=="A" and .outcome=="na")]|length' "$OUT_FILE" 2>/dev/null || echo 0)
+    echo ""
+    echo "исключено как n/a (сброс контекста внутри интервала): $NA"
+    echo ""
+    echo "Плечи: treated = имя файла матчит сигнал И маркер найден по toolUseID;"
+    echo "treated_unknown = имя матчит, маркера нет (хук выключен / файл короче порога);"
+    echo "placebo = прочие .md, где маркер структурно невозможен."
+    echo "Сливать treated_unknown с placebo нельзя — это разные причины отсутствия маркера."
+    echo ""
+    SUB_N=$(jq -rs '[.[]|select(.cls=="A" and .sub==true)]|length' "$OUT_FILE" 2>/dev/null || echo 0)
+    SUB_OK=$(jq -rs '[.[]|select(.cls=="A" and .sub==true and .v_loose==true)]|length' "$OUT_FILE" 2>/dev/null || echo 0)
+    echo "Субагентские сессии: $SUB_N интервалов, из них с перечитыванием $SUB_OK."
+    echo "Это отдельная популяция (у субагента нет ни маркера, ни продолжения работы с файлом) —"
+    echo "смешивать с основной нельзя; при анализе фильтровать по .sub."
+    echo ""
+    echo "⚠️ ОГРАНИЧЕНИЕ, известное до прогона и подтверждённое им."
+    echo "Сигнал блокера срабатывает по порогу длины файла (≥300 строк). Длина файла"
+    echo "независимо предсказывает и вероятность перечитать его целиком. То есть назначение"
+    echo "в treated и исход имеют общую причину — сравнение treated с treated_unknown"
+    echo "НЕ идентифицирует эффект маркера, оно измеряет разницу между длинными и короткими"
+    echo "документами. Разность разностей здесь читать нельзя. Идентифицирующий дизайн —"
+    echo "разрыв вокруг самого порога 300 строк (файлы 280-320), данных на него пока нет."
+
+    echo ""
+    echo "=== Класс B: расстояние от инжекта знаний до действия ==="
+    printf '%-8s %6s %6s %6s\n' "бин" "n" "verif" "%"
+    jq -rs '
+      [ .[] | select(.cls=="B") ] | group_by(.exposure) | .[]
+      | { e: .[0].exposure, n: length, ok: ([.[]|select(.outcome=="compliant")]|length) }
+      | "\(.e)\t\(.n)\t\(.ok)\t\(if .n>0 then (.ok*1000/.n|floor|./10) else 0 end)"
+    ' "$OUT_FILE" 2>/dev/null | sort | while IFS=$'\t' read -r e n ok pct; do
+        printf '%-8s %6s %6s %5s%%\n' "$e" "$n" "$ok" "$pct"
+    done
+
+    echo ""
+    echo "=== Класс C: негативный контроль (предупреждение о языке) ==="
+    # Колонка «не изм.» — ходы, где детектор упал: они НЕ входят ни в «ходов», ни в
+    # среднее. Раньше отказ детектора приходил пустым списком и складывался в «нарушений
+    # нет», то есть отрицательный контроль наполнялся нулями и отвечал «маркер не влияет»
+    # неотличимо от настоящего результата.
+    printf '%-10s %6s %10s %10s %8s\n' "плечо" "ходов" "ср.токенов" "внутрисл." "не изм."
+    jq -rs '
+      [ .[] | select(.cls=="C") ] | group_by(.exposure) | .[]
+      | ( [ .[] | select(.na_reason == null) ] ) as $m
+      | { e: .[0].exposure, n: ($m|length), nm: (length - ($m|length)),
+          t: ([$m[].tokens_total]|add // 0), iw: ([$m[].tokens_intraword]|add // 0) }
+      | "\(.e)\t\(.n)\t\(if .n>0 then (.t*100/.n|floor|./100) else 0 end)\t\(.iw)\t\(.nm)"
+    ' "$OUT_FILE" 2>/dev/null | while IFS=$'\t' read -r e n t iw nm; do
+        printf '%-10s %6s %10s %10s %8s\n' "$e" "$n" "$t" "$iw" "$nm"
+    done
+    echo ""
+    echo "p-value не считается: наблюдения кластеризованы, наивный бином завысит значимость."
+}
+
+if [ "$REPORT_ONLY" = true ]; then report; exit 0; fi
+
+# --- Гейт: сходится ли восстановленное с тем, что писали хуки в своё время ---
+if [ "$VERIFY_LOG" = true ]; then
+    echo "=== Round-trip: транскрипты против blocker-fired-*.jsonl ==="
+    MATCHED=0; TRANSCRIPT_ONLY=0; LOG_ONLY=0; CHECKED=0
+    for log in "$STATE_DIR"/blocker-fired-*.jsonl; do
+        [ -f "$log" ] || continue
+        # Суффикс актора снимается: расшифровка именуется СЕССИЕЙ, а не актором (D457).
+        sid=$(basename "$log" .jsonl); sid="${sid#blocker-fired-}"; sid="${sid%%.agent-*}"
+        tr_path=$(printf '%s\n' "$TRANSCRIPTS" | grep -F "/${sid}.jsonl" | head -1)
+        # `grep -c` САМ печатает 0 и выходит с единицей, поэтому `|| echo 0` дописывал
+        # второй ноль: значение выходило двухстрочным «0\n0», и арифметика ниже падала
+        # с «integer expression expected». На живых данных не проявлялось — там совпадения
+        # были всегда, и дефект ждал первой сессии без единого срабатывания.
+        LOG_N=$({ jq -rR 'fromjson? // empty | .signal' "$log" 2>/dev/null | grep -c '.'; } || true)
+        LOG_N=$(printf '%s' "${LOG_N:-0}" | tr -dc '0-9'); : "${LOG_N:=0}"
+        if [ -z "$tr_path" ]; then
+            LOG_ONLY=$((LOG_ONLY + LOG_N)); continue
+        fi
+        CHECKED=$((CHECKED + 1))
+        TR_N=$({ python3 "$WORKER" "$tr_path" --events 2>/dev/null | grep -c '.'; } || true)
+        TR_N=$(printf '%s' "${TR_N:-0}" | tr -dc '0-9'); : "${TR_N:=0}"
+        if [ "$TR_N" -ge "$LOG_N" ]; then
+            MATCHED=$((MATCHED + LOG_N)); TRANSCRIPT_ONLY=$((TRANSCRIPT_ONLY + TR_N - LOG_N))
+        else
+            MATCHED=$((MATCHED + TR_N)); LOG_ONLY=$((LOG_ONLY + LOG_N - TR_N))
+        fi
+    done
+    echo "сессий с живым транскриптом: $CHECKED"
+    echo "matched:          $MATCHED"
+    echo "log_only:         $LOG_ONLY   (ожидаемо: транскрипты стёрты по сроку хранения)"
+    echo "transcript_only:  $TRANSCRIPT_ONLY"
+    if [ "$TRANSCRIPT_ONLY" -gt 0 ]; then
+        echo ""
+        echo "⚠️ transcript_only > 0 — парсер видит события, которых хук не писал."
+        echo "   Это значит, что восстановление недостоверно. Дальше не считать."
+        exit 1
+    fi
+    # Гейт минимальной выборки (D58). Без него «пройден» на ДВУХ сессиях звучит с той же
+    # уверенностью, что на двадцати шести, — а именно столько было до 2026-08-01, когда
+    # уборка throttle снесла 122 файла `blocker-fired-*` (D57). Утверждение «парсер не
+    # выдумывает событий» проверяется отсутствием расхождений; при крошечной выборке
+    # отсутствие расхождений не отличимо от отсутствия данных.
+    #
+    # Тот же приём уже применён к метрикам вмешательства в v1.12.0: процент не
+    # показывается без n, а вывод не делается ниже порога выборки.
+    MIN_SESSIONS="${COMPLIANCE_MIN_SESSIONS:-10}"
+    if [ "$CHECKED" -lt "$MIN_SESSIONS" ]; then
+        echo ""
+        echo "⚠️ Расхождений нет, но выборка мала: ${CHECKED} сессий против порога ${MIN_SESSIONS}."
+        echo "   Это НЕ «гейт пройден» — при такой выборке отсутствие расхождений не отличимо"
+        echo "   от отсутствия данных. Вывод о достоверности парсера не делается."
+        exit 2
+    fi
+    echo ""
+    echo "✅ Гейт пройден: парсер не выдумывает событий (сессий в выборке: ${CHECKED})."
+    exit 0
+fi
+
+echo "=== Backfill compliance ==="
+echo "источник:   $PROJECTS_DIR"
+echo "транскриптов: $COUNT"
+echo "классы:     $CLASSES"
+echo "выход:      $OUT_FILE"
+
+if [ "$DRY_RUN" = true ]; then
+    echo "(dry-run — ничего не записано)"
+    exit 0
+fi
+
+# Бэкап предыдущего прогона: файл намеренно отдельный от живых логов, чтобы
+# бэкфилл не отравлял метрики (та же дисциплина, что у backfill-intrusiveness).
+BAK=""
+if [ -s "$OUT_FILE" ]; then
+    BAK="${OUT_FILE}.bak.$(date +%s)"
+    mv "$OUT_FILE" "$BAK"
+fi
+mkdir -p "$(dirname "$OUT_FILE")"
+: > "$OUT_FILE"
+
+T0=$(date +%s)
+# Граница записи — NUL (D1208, корень R6): у BSD `xargs` ключ `-n 1` перебивал `-I`, и путь с пробелом снова резался по
+# пробелу; без `-0` апостроф в пути давал «unterminated quote».
+# Отказ воркера — сбой реплея, а не «наблюдений нет» (D1246, корень R6): прежде stderr глушился, а код трубы не читался,
+# и нечитаемая расшифровка давала 0 и «наблюдений: N» без её вклада. Устройство — у брата `backfill-intrusiveness.sh:103`.
+printf '%s\n' "$TRANSCRIPTS" | grep -v '^$' | tr '\n' '\0' | \
+    xargs -0 -P "$PARALLEL" -I {} python3 "$WORKER" {} --classes "$CLASSES" | \
+    grep -v '^$' > "$OUT_FILE"
+_bc_rc=("${PIPESTATUS[@]}")
+if [ "${_bc_rc[3]:-0}" -ne 0 ]; then
+    # Бэкап прежнего итога назван, как у брата (`backfill-intrusiveness.sh:108`): неполный файл лежит на основном пути,
+    # и `--report` прочёл бы его как полный (скептик opus по 03474690, L2).
+    echo "backfill-compliance: воркер отказал (код xargs ${_bc_rc[3]}) — реплей неисправен: $OUT_FILE неполон${BAK:+, прежний итог — $BAK}" >&2
+    exit 2
+fi
+T1=$(date +%s)
+
+TOTAL=$(grep -c '' "$OUT_FILE" 2>/dev/null) || TOTAL=0
+echo ""
+echo "наблюдений:  $TOTAL   за $((T1 - T0))с"
+for c in A B C; do
+    N=$(jq -rR 'fromjson? // empty | select(.cls=="'"$c"'") | .cls' "$OUT_FILE" 2>/dev/null | grep -c '.') || N=0
+    echo "  класс $c:  $N"
+done
+echo ""
+echo "Дальше: bash hooks/backfill-compliance.sh --report"

@@ -1,0 +1,38 @@
+# gitleaks.toml — конфигурация для secret-guard (уровень 4, отказ).
+#
+# Два отличия от дефолта, оба ЗАМЕРЕНЫ 9 сентября 2026, а не выбраны на вкус:
+#
+# 1. generic-api-key ОТКЛЮЧЕНО. Замер на четырёх деревьях (~/.claude/hooks,
+#    ~/.claude/commands, ~/.claude/global-lessons, ClaudSoul): 271 срабатывание,
+#    ложных 271 из 271 — правило ловит UUID сессий и хеши в state/*.jsonl по форме
+#    "key": "<энтропия>". Это эвристика по энтропии, и последствия у неё РАЗНЫЕ:
+#    от живого ключа до идентификатора записи. Признак с разными последствиями
+#    уровень 4 не держит — отказ с ложными обязан снова стать подсказкой
+#    (case-2026-08-28-enforcement-is-a-property-of-consequence).
+#    После отключения: 0 срабатываний на тех же четырёх деревьях.
+#
+# 2. ДОБАВЛЕНО правило anthropic-api-key. Дефолтный набор gitleaks 8.30.1 его не знает:
+#    проверено stdin-прогоном на форме sk-ant-api03- + 95 символов — НЕ ПОЙМАН,
+#    при том что openai-api-key, github-fine-grained-pat, aws-access-token,
+#    slack-bot-token, stripe-access-token и private-key ловятся.
+#
+# Замер чувствительности (формы из мира, с настоящей энтропией — низкоэнтропийная
+# фикстура даёт ложный вывод «не ловит», проверено трижды за постройку):
+#    aws-access-token ✓  github-pat ✓  github-fine-grained-pat ✓  openai-api-key ✓
+#    slack-bot-token ✓   stripe-access-token ✓  private-key ✓  anthropic-api-key ✓ (своё)
+
+title = "secret-guard: признаки с ОДНИМ последствием"
+
+[extend]
+useDefault = true
+
+[[rules]]
+id = "generic-api-key"
+description = "ОТКЛЮЧЕНО: эвристика по энтропии, 271/271 ложных при замере"
+regex = '''$^'''
+
+[[rules]]
+id = "anthropic-api-key"
+description = "Anthropic API key — дефолтный набор gitleaks 8.30.1 его не содержит"
+regex = '''sk-ant-(?:api03|admin01)-[A-Za-z0-9_\-]{80,120}'''
+keywords = ["sk-ant-"]

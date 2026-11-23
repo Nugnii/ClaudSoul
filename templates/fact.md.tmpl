@@ -1,0 +1,32 @@
+---
+name: [короткое имя факта]
+description: [одна строка: что утверждается]
+type: fact
+fact_type: attribute          # attribute | event | rule | definition
+status: active                # active | superseded | contradicted
+
+confidence: 1                 # Рассчитывается из sources по 3.2 META.md
+sources: []
+# Пример:
+# sources:
+#   - id: source-id:loc        # PDF:страница, chat:msgN, url...
+#     type: document           # self-report | document | third-party | behavioral | cross-reference
+#     extracted: YYYY-MM-DD
+
+# Temporal validity (когда факт верен)
+valid_from: ""                # YYYY или YYYY-MM-DD; пусто если всегда
+valid_until: null             # null = всё ещё верен
+temporal_note: ""             # "до ребрендинга", "на момент серии A"
+
+# Привязки
+entity_refs: []               # ID entity-*.md, к которым факт относится
+domain: []
+tags: []
+
+# Связи с операционным контуром
+edges: []                     # Типизированные связи к case/pattern/principle
+---
+
+[Содержание факта свободной прозой. Если факт — атрибут сущности, предпочесть хранить
+в `attributes` соответствующего entity. Отдельный fact-файл — когда факт сам по себе
+ценен (например, общее утверждение о мире или событии).]

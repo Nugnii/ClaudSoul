@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClaudSoul — Dashboard</title>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+    background: #0a0a1a;
+    color: #c8d0e0;
+    font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+    overflow-x: hidden;
+    min-height: 100vh;
+}
+
+/* Cosmic background */
+#stars-canvas {
+    position: fixed;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    z-index: 0;
+    pointer-events: none;
+}
+
+.container {
+    position: relative;
+    z-index: 1;
+    max-width: 1200px;
+    margin: 0 auto;
+    padding: 24px;
+}
+
+/* Header */
+.header {
+    text-align: center;
+    margin-bottom: 32px;
+    padding: 24px 0;
+}
+
+.header h1 {
+    font-size: 28px;
+    font-weight: 300;
+    color: #e8ecf4;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+}
+
+.header h1 span {
+    color: #7aa2f7;
+}
+
+.header .subtitle {
+    font-size: 13px;
+    color: #565f89;
+    margin-top: 8px;
+    letter-spacing: 2px;
+}
+
+/* Summary cards */
+.summary-row {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.card {
+    background: rgba(15, 15, 35, 0.85);
+    border: 1px solid rgba(122, 162, 247, 0.15);
+    border-radius: 8px;
+    padding: 20px;
+    backdrop-filter: blur(8px);
+    transition: border-color 0.3s;
+}
+
+.card:hover {
+    border-color: rgba(122, 162, 247, 0.4);
+}
+
+.card .label {
+    font-size: 11px;
+    color: #565f89;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 8px;
+}
+
+.card .value {
+    font-size: 36px;
+    font-weight: 200;
+    color: #e8ecf4;
+}
+
+.card .value .unit {
+    font-size: 14px;
+    color: #565f89;
+    margin-left: 4px;
+}
+
+/* Grid */
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+.grid-3 {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 16px;
+    margin-bottom: 24px;
+}
+
+/* Chart cards */
+.chart-card {
+    background: rgba(15, 15, 35, 0.85);
+    border: 1px solid rgba(122, 162, 247, 0.15);
+    border-radius: 8px;
+    padding: 20px;
+    backdrop-filter: blur(8px);
+}
+
+.chart-card h3 {
+    font-size: 13px;
+    color: #7aa2f7;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    margin-bottom: 16px;
+    font-weight: 400;
+}
+
+/* Bar charts */
+.bar-chart {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.bar-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.bar-label {
+    font-size: 12px;
+    color: #8b95b0;
+    width: 24px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+.bar-track {
+    flex: 1;
+    height: 24px;
+    background: rgba(122, 162, 247, 0.06);
+    border-radius: 4px;
+    overflow: hidden;
+    position: relative;
+}
+
+.bar-fill {
+    height: 100%;
+    border-radius: 4px;
+    transition: width 1s ease-out;
+    position: relative;
+}
+
+.bar-fill::after {
+    content: '';
+    position: absolute;
+    top: 0; right: 0;
+    width: 2px; height: 100%;
+    background: rgba(255, 255, 255, 0.3);
+}
+
+.bar-count {
+    font-size: 12px;
+    color: #565f89;
+    width: 28px;
+    text-align: left;
+    flex-shrink: 0;
+}
+
+/* Donut chart */
+.donut-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 24px;
+}
+
+.donut-legend {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 12px;
+}
+
+.legend-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.legend-count {
+    color: #565f89;
+    margin-left: 4px;
+}
+
+/* Domain map */
+.domain-grid {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.domain-chip {
+    padding: 4px 10px;
+    border-radius: 12px;
+    font-size: 11px;
+    border: 1px solid;
+    transition: transform 0.2s;
+}
+
+.domain-chip:hover {
+    transform: scale(1.05);
+}
+
+/* Table */
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.data-table th {
+    font-size: 11px;
+    color: #565f89;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    text-align: left;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(122, 162, 247, 0.15);
+    font-weight: 400;
+}
+
+.data-table td {
+    font-size: 12px;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(122, 162, 247, 0.06);
+}
+
+.data-table tr:hover td {
+    background: rgba(122, 162, 247, 0.04);
+}
+
+/* Badges */
+.badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 10px;
+    font-size: 10px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.badge-principle { background: rgba(255, 160, 60, 0.15); color: #ffa03c; }
+.badge-pattern { background: rgba(122, 162, 247, 0.15); color: #7aa2f7; }
+.badge-case { background: rgba(115, 218, 202, 0.15); color: #73daca; }
+.badge-unknown { background: rgba(86, 95, 137, 0.15); color: #565f89; }
+
+/* Reliability bars */
+.rel-bar {
+    display: inline-block;
+    height: 6px;
+    border-radius: 3px;
+    min-width: 4px;
+}
+
+.rel-positive { background: linear-gradient(90deg, #73daca, #7aa2f7); }
+.rel-negative { background: linear-gradient(90deg, #f7768e, #ff9e64); }
+
+/* Health issues */
+.health-list {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+.health-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: rgba(247, 118, 142, 0.06);
+    border-left: 2px solid #f7768e;
+    border-radius: 0 4px 4px 0;
+    font-size: 12px;
+}
+
+.health-item .issue-tags {
+    display: flex;
+    gap: 4px;
+    margin-left: auto;
+}
+
+.issue-tag {
+    padding: 2px 6px;
+    border-radius: 8px;
+    font-size: 10px;
+    background: rgba(247, 118, 142, 0.12);
+    color: #f7768e;
+}
+
+/* Mass chart */
+.mass-bars {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+}
+
+.mass-col {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+}
+
+.mass-bar {
+    width: 48px;
+    border-radius: 4px 4px 0 0;
+    transition: height 1s ease-out;
+}
+
+.mass-label {
+    font-size: 11px;
+    color: #8b95b0;
+}
+
+.mass-value {
+    font-size: 12px;
+    color: #e8ecf4;
+}
+
+/* Navigation */
+.nav-link {
+    position: fixed;
+    top: 20px;
+    right: 24px;
+    z-index: 10;
+    font-size: 12px;
+    color: #565f89;
+    text-decoration: none;
+    padding: 6px 14px;
+    border: 1px solid rgba(122, 162, 247, 0.2);
+    border-radius: 16px;
+    transition: all 0.3s;
+}
+
+.nav-link:hover {
+    color: #7aa2f7;
+    border-color: rgba(122, 162, 247, 0.5);
+}
+
+/* Empty state */
+.empty {
+    text-align: center;
+    padding: 32px;
+    color: #565f89;
+    font-style: italic;
+}
+
+@media (max-width: 900px) {
+    .summary-row { grid-template-columns: repeat(2, 1fr); }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<canvas id="stars-canvas"></canvas>
+
+<a href="index.html" class="nav-link">Граф знаний &rarr;</a>
+
+<div class="container">
+    <div class="header">
+        <h1>Claud<span>Soul</span></h1>
+        <div class="subtitle">Dashboard &mdash; метрики базы знаний</div>
+    </div>
+
+    <!-- Summary cards -->
+    <div class="summary-row" id="summary-cards"></div>
+
+    <!-- Charts row 1: distributions -->
+    <div class="grid-3">
+        <div class="chart-card">
+            <h3>По типу</h3>
+            <div id="type-donut" class="donut-container"></div>
+        </div>
+        <div class="chart-card">
+            <h3>Уверенность</h3>
+            <div id="conf-chart" class="bar-chart"></div>
+        </div>
+        <div class="chart-card">
+            <h3>Влияние</h3>
+            <div id="impact-chart" class="bar-chart"></div>
+        </div>
+    </div>
+
+    <!-- Charts row 2: domains + mass -->
+    <div class="grid-2">
+        <div class="chart-card">
+            <h3>Покрытие доменов</h3>
+            <div id="domain-map" class="domain-grid"></div>
+        </div>
+        <div class="chart-card" style="display:flex; flex-direction:column;">
+            <h3>Средняя масса по типу</h3>
+            <div id="mass-chart" class="mass-bars"></div>
+        </div>
+    </div>
+
+    <!-- Tables row -->
+    <div class="grid-2">
+        <div class="chart-card">
+            <h3>Топ по надёжности</h3>
+            <div id="reliability-table"></div>
+        </div>
+        <div class="chart-card">
+            <h3>Последние обновления</h3>
+            <div id="recent-table"></div>
+        </div>
+    </div>
+
+    <!-- Health -->
+    <div class="chart-card" style="margin-bottom: 24px;">
+        <h3>Здоровье базы</h3>
+        <div id="health-list" class="health-list"></div>
+    </div>
+</div>
+
+<script>
+// Color palette
+const TYPE_COLORS = {
+    principle: '#ffa03c',
+    pattern: '#7aa2f7',
+    case: '#73daca',
+    unknown: '#565f89',
+};
+
+const TYPE_RU = {
+    principle: 'Принципы',
+    pattern: 'Паттерны',
+    case: 'Кейсы',
+    unknown: 'Прочее',
+};
+
+const ISSUE_RU = {
+    unconfirmed: 'не подтверждён',
+    contradicted: 'оспорен',
+    weakened: 'ослаблен',
+    deprecated: 'устарел',
+};
+
+// Stars background
+(function initStars() {
+    const canvas = document.getElementById('stars-canvas');
+    const ctx = canvas.getContext('2d');
+    let stars = [];
+
+    function resize() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+        stars = Array.from({length: 200}, () => ({
+            x: Math.random() * canvas.width,
+            y: Math.random() * canvas.height,
+            r: Math.random() * 1.2 + 0.2,
+            a: Math.random() * 0.6 + 0.2,
+            speed: Math.random() * 0.0005 + 0.0002,
+            phase: Math.random() * Math.PI * 2,
+        }));
+    }
+
+    function draw(t) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        stars.forEach(s => {
+            const alpha = s.a * (0.6 + 0.4 * Math.sin(t * s.speed + s.phase));
+            ctx.beginPath();
+            ctx.arc(s.x, s.y, s.r, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(200, 210, 230, ${alpha})`;
+            ctx.fill();
+        });
+        requestAnimationFrame(draw);
+    }
+
+    window.addEventListener('resize', resize);
+    resize();
+    requestAnimationFrame(draw);
+})();
+
+// Load data and render
+fetch('dashboard-data.json')
+    .then(r => r.json())
+    .then(render)
+    .catch(err => {
+        document.querySelector('.container').innerHTML += `<div class="empty">Ошибка загрузки данных: ${err.message}</div>`;
+    });
+
+function render(data) {
+    renderSummary(data.summary);
+    renderDonut(data.summary.by_type);
+    renderDistribution('conf-chart', data.confidence_dist, '#7aa2f7');
+    renderDistribution('impact-chart', data.impact_dist, '#ffa03c');
+    renderDomains(data.domains);
+    renderMass(data.type_mass);
+    renderReliability(data.reliability);
+    renderRecent(data.recent);
+    renderHealth(data.health);
+}
+
+function renderSummary(s) {
+    const el = document.getElementById('summary-cards');
+    const cards = [
+        { label: 'Всего записей', value: s.total, unit: '' },
+        { label: 'Средняя уверенность', value: s.avg_confidence, unit: '/ 5' },
+        { label: 'Среднее влияние', value: s.avg_impact, unit: '/ 5' },
+        { label: 'Типов', value: Object.keys(s.by_type).length, unit: '' },
+    ];
+    el.innerHTML = cards.map(c => `
+        <div class="card">
+            <div class="label">${c.label}</div>
+            <div class="value">${c.value}<span class="unit">${c.unit}</span></div>
+        </div>
+    `).join('');
+}
+
+function renderDonut(byType) {
+    const el = document.getElementById('type-donut');
+    const entries = Object.entries(byType).sort((a, b) => b[1] - a[1]);
+    const total = entries.reduce((s, e) => s + e[1], 0);
+    const size = 120;
+    const r = 50, inner = 30;
+
+    let svg = `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">`;
+    const cx = size / 2, cy = size / 2;
+    let angle = -Math.PI / 2;
+
+    entries.forEach(([type, count]) => {
+        const slice = (count / total) * Math.PI * 2;
+        const x1 = cx + r * Math.cos(angle);
+        const y1 = cy + r * Math.sin(angle);
+        const x2 = cx + r * Math.cos(angle + slice);
+        const y2 = cy + r * Math.sin(angle + slice);
+        const ix1 = cx + inner * Math.cos(angle);
+        const iy1 = cy + inner * Math.sin(angle);
+        const ix2 = cx + inner * Math.cos(angle + slice);
+        const iy2 = cy + inner * Math.sin(angle + slice);
+        const large = slice > Math.PI ? 1 : 0;
+        const color = TYPE_COLORS[type] || '#565f89';
+
+        svg += `<path d="M${x1},${y1} A${r},${r} 0 ${large},1 ${x2},${y2} L${ix2},${iy2} A${inner},${inner} 0 ${large},0 ${ix1},${iy1} Z" fill="${color}" opacity="0.85"/>`;
+        angle += slice;
+    });
+
+    svg += `<text x="${cx}" y="${cy}" text-anchor="middle" dy="0.35em" fill="#e8ecf4" font-size="18" font-weight="200">${total}</text>`;
+    svg += `</svg>`;
+
+    const legend = entries.map(([type, count]) => `
+        <div class="legend-item">
+            <div class="legend-dot" style="background: ${TYPE_COLORS[type] || '#565f89'}"></div>
+            ${TYPE_RU[type] || type}<span class="legend-count">${count}</span>
+        </div>
+    `).join('');
+
+    el.innerHTML = svg + `<div class="donut-legend">${legend}</div>`;
+}
+
+function renderDistribution(containerId, dist, color) {
+    const el = document.getElementById(containerId);
+    const max = Math.max(...Object.values(dist), 1);
+
+    el.innerHTML = Object.entries(dist).map(([level, count]) => {
+        const pct = (count / max) * 100;
+        const opacity = 0.4 + (parseInt(level) / 5) * 0.6;
+        return `
+            <div class="bar-row">
+                <div class="bar-label">${level}</div>
+                <div class="bar-track">
+                    <div class="bar-fill" style="width: ${pct}%; background: ${color}; opacity: ${opacity};"></div>
+                </div>
+                <div class="bar-count">${count}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+function renderDomains(domains) {
+    const el = document.getElementById('domain-map');
+    const entries = Object.entries(domains).sort((a, b) => b[1] - a[1]);
+    const max = Math.max(...entries.map(e => e[1]), 1);
+
+    // Reverse map: domain key or alias → Russian label
+    // Built from domains/*.md YAML (name + aliases)
+    const domainRu = {
+        // From domain YAML files
+        'agent_design': 'Проектирование агентов',
+        'agent_systems': 'Проектирование агентов',
+        'cognitive_architecture': 'Когнитивная архитектура',
+        'arts': 'Искусство',
+        'business': 'Бизнес',
+        'cognitive_science': 'Когнитивистика',
+        'communication': 'Коммуникация',
+        'devops': 'DevOps',
+        'tooling': 'DevOps',
+        'economics': 'Экономика',
+        'engineering': 'Инженерия',
+        'health': 'Здоровье',
+        'humanities': 'Гуманитарные',
+        'knowledge_management': 'Управление знаниями',
+        'law': 'Право',
+        'metacognition': 'Метакогниция',
+        'self_improvement': 'Метакогниция',
+        'pedagogy': 'Педагогика',
+        'learning': 'Педагогика',
+        'philosophy': 'Философия',
+        'psychology': 'Психология',
+        'sales': 'Продажи',
+        'b2b_sales': 'Продажи',
+        'science': 'Наука',
+        'shell_scripting': 'Shell-скрипты',
+        'shell': 'Shell-скрипты',
+        'bash': 'Shell-скрипты',
+        'hooks': 'Shell-скрипты',
+        'skill_architecture': 'Архитектура скиллов',
+        'skill_management': 'Архитектура скиллов',
+        'claude_code': 'Claude Code',
+        'software_development': 'Разработка',
+        'system_design': 'Проектирование систем',
+        'architecture': 'Проектирование систем',
+        // Additional common domains
+        'problem_solving': 'Решение проблем',
+        'collaboration': 'Совместная работа',
+        'co_cognition': 'Со-мышление',
+        'documentation': 'Документация',
+        'python': 'Python',
+        'sqlite': 'SQLite',
+        'mcp': 'MCP',
+        'claudsoul': 'ClaudSoul',
+        'api_integration': 'API-интеграция',
+        'martial_arts': 'Боевые искусства',
+        'user_modeling': 'Моделирование пользователя',
+        'universal': 'Универсальное',
+        'software_design': 'Проектирование ПО',
+    };
+
+    el.innerHTML = entries.map(([domain, count]) => {
+        const intensity = 0.3 + (count / max) * 0.7;
+        const hue = (hashCode(domain) % 360 + 360) % 360;
+        const bg = `hsla(${hue}, 60%, 60%, ${intensity * 0.15})`;
+        const border = `hsla(${hue}, 60%, 60%, ${intensity * 0.4})`;
+        const color = `hsla(${hue}, 60%, 70%, ${intensity})`;
+        const label = domainRu[domain] || domain;
+        return `<div class="domain-chip" style="background: ${bg}; border-color: ${border}; color: ${color}">${label} <span style="opacity:0.6">${count}</span></div>`;
+    }).join('');
+}
+
+function renderMass(typeMass) {
+    const el = document.getElementById('mass-chart');
+    const entries = Object.entries(typeMass).sort((a, b) => b[1] - a[1]);
+    const max = Math.max(...entries.map(e => e[1]), 1);
+    const maxH = 80;
+
+    // Wrapper: flex-end for bars growing up, centered in container
+    el.innerHTML = `<div style="display:flex; align-items:flex-end; justify-content:center; gap:20px;">
+        ${entries.map(([type, mass]) => {
+            const h = (mass / max) * maxH;
+            const color = TYPE_COLORS[type] || '#565f89';
+            return `
+                <div class="mass-col">
+                    <div class="mass-value">${mass}</div>
+                    <div class="mass-bar" style="height: ${h}px; background: ${color}; opacity: 0.75;"></div>
+                    <div class="mass-label">${TYPE_RU[type] || type}</div>
+                </div>
+            `;
+        }).join('')}
+    </div>`;
+}
+
+function renderReliability(rel) {
+    const el = document.getElementById('reliability-table');
+    const all = [...rel.top, ...rel.bottom.reverse()];
+
+    if (!all.length) {
+        el.innerHTML = '<div class="empty">Нет данных</div>';
+        return;
+    }
+
+    const maxRel = Math.max(...all.map(e => Math.abs(e.reliability)), 1);
+
+    el.innerHTML = `<table class="data-table">
+        <thead><tr><th>Запись</th><th>Тип</th><th>Надёжность</th></tr></thead>
+        <tbody>${all.map(e => {
+            const w = (Math.abs(e.reliability) / maxRel) * 60;
+            const cls = e.reliability >= 0 ? 'rel-positive' : 'rel-negative';
+            return `<tr>
+                <td>${e.name}</td>
+                <td><span class="badge badge-${e.type}">${TYPE_RU[e.type] || e.type}</span></td>
+                <td style="white-space: nowrap">
+                    <span class="rel-bar ${cls}" style="width: ${Math.max(w, 4)}px"></span>
+                    <span style="margin-left: 6px; font-size: 11px; color: ${e.reliability >= 0 ? '#73daca' : '#f7768e'}">${e.reliability >= 0 ? '+' : ''}${e.reliability}</span>
+                </td>
+            </tr>`;
+        }).join('')}</tbody>
+    </table>`;
+}
+
+function renderRecent(recent) {
+    const el = document.getElementById('recent-table');
+    if (!recent.length) {
+        el.innerHTML = '<div class="empty">Нет данных</div>';
+        return;
+    }
+
+    el.innerHTML = `<table class="data-table">
+        <thead><tr><th>Запись</th><th>Тип</th><th>Уверенность</th></tr></thead>
+        <tbody>${recent.map(e => `<tr>
+            <td>${e.name}</td>
+            <td><span class="badge badge-${e.type}">${TYPE_RU[e.type] || e.type}</span></td>
+            <td>${e.confidence}/5</td>
+        </tr>`).join('')}</tbody>
+    </table>`;
+}
+
+function renderHealth(health) {
+    const el = document.getElementById('health-list');
+    if (!health.length) {
+        el.innerHTML = '<div class="empty" style="color: #73daca;">Все записи здоровы</div>';
+        return;
+    }
+
+    el.innerHTML = health.map(h => `
+        <div class="health-item">
+            <span class="badge badge-${h.type}">${TYPE_RU[h.type] || h.type}</span>
+            <span>${h.name}</span>
+            <div class="issue-tags">
+                ${h.issues.map(i => `<span class="issue-tag">${ISSUE_RU[i] || i}</span>`).join('')}
+            </div>
+        </div>
+    `).join('');
+}
+
+function hashCode(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+        hash = ((hash << 5) - hash) + str.charCodeAt(i);
+        hash |= 0;
+    }
+    return hash;
+}
+</script>
+</body>
+</html>

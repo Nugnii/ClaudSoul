@@ -1,0 +1,152 @@
+<!-- derived-from: docs/reference.ru.md@4c39b4d76e47 -->
+# Reference — hooks and commands
+
+Generated from source: `README_FILE=docs/reference.md bash scripts/regen-readme-skills.sh` (without `README_FILE` the script regenerates `README.md`, not this file). Do not edit the tables by hand: hook descriptions come from the `# en:` line in each hook's header, command descriptions from `description_en` in each `SKILL.md` frontmatter. Edit those, then rerun the command.
+
+Back to [README](../README.md).
+
+## Hooks
+
+Hooks are shell scripts. 90 of the 98 hooks are wired into Claude Code lifecycle events (`SessionStart`, `UserPromptSubmit`, `PreToolUse`, `PostToolUse`, `PostToolUseFailure`, `PreCompact`, `Stop`, `SubagentStop`, `SessionEnd`) and detect, inject and log without being invoked; the rest run on a launchd schedule, are called by other hooks or commands, or are one-off backfills run by hand.
+
+21 of them can actually interrupt a call, in two different ways. 5 raise `permissionDecision: ask` and hand the choice to you — `bash-cost-detector`, `bulk-copy-guard`, `git-add-sweep-guard`, `internal-doc-leak-guard`, `user-correction-guard`. 16 return `deny` and refuse the agent without disturbing you — for example `five-whys-gate`, `merge-root-gate`, `secret-guard`, `publish-guard` and `blocker-tier-check`; the last one only for knowledge whose signal carries `enforcement: deny`. The full lists by name are in the [README](../README.md); the claims registry keeps them. Everything else writes silently into the agent's context and leaves the decision to it — noise is its own failure mode.
+
+<!-- HOOKS-TABLE:START -->
+
+| Hook | When it fires and what it does |
+|-----|-------------------------------|
+| `ablation-phase-guard` | while a measurement phase is active (§6 of the protocol), injects a per-session signal and guards the installed policy surface from deploys; nobody has to remember. |
+| `absent-tool-guard` | PreToolUse[Bash] — refuses a command that calls a tool absent on this machine. |
+| `accepted-alternative-gap` | Stop hook — detects "your variant is better" acceptance in the assistant's last reply and demands the same gap analysis as external-correction-gap. |
+| `affected-tests-reminder` | PreToolUse[Bash] on `git commit`: names the command that collects the affected-test set when it was not collected. |
+| `agent-model-notice` | PreToolUse on agent/workflow launches — hints when a heavy agent type is used where `lean` would do, or when opus is named. |
+| `auto-scanner` | launchd (every 4h): read-only scan of projects, findings written to scan-results.md for the next session. |
+| `backfill-compliance` | restores the DEPENDENT VARIABLE from archived transcripts (offline, read-only). |
+| `backfill-intrusiveness` | One-off backfill of gentle/proactive events from archived transcripts; not a hook, runs on demand. |
+| `backlog-open-write-guard` | PreToolUse on BACKLOG.md edits — refuses to write an OPEN debt item whose check is green or missing at write time. |
+| `backlog-reading-refresh` | PostToolUse on backlog writes and reads — item readings are recomputed on write and checked against the world on read. |
+| `backlog-touch-check` | PreToolUse on file edits — the file is named in an open backlog item. |
+| `backlog-vanish-check` | PreToolUse[Bash] on `git commit`: a debt item must not vanish without a trace. |
+| `bash-cost-detector` | PreToolUse[Bash]: detects destructive commands (rm -rf, git push --force, DROP) and raises the silence_cost signal for the L6 gate. |
+| `bash-write-dispatch` | PostToolUse[Bash] — replays file writes made via shell into the guards registered for Edit/Write only. |
+| `blocker-tier-check` | PreToolUse: silent 🛑 marker for knowledge with `blocker: true` when the action matches the pattern's detection_signals. |
+| `bridge-health-digest` | Monthly mechanical digest for the 16 bridges in bridges/ (inter-layer ones plus the intra-layer L2↔L2 one): status, layers, versions, aggregate counts. |
+| `budget-gate` | PreToolUse[Edit\|Write\|MultiEdit\|NotebookEdit]: an unsolicited edit made on an exhausted proactive budget is told to become a question instead (ADR-010 phase 2). |
+| `bulk-copy-guard` | PreToolUse guard: asks the user before bulk copy/move/rsync operations. |
+| `carrier-growth-check` | Stop hook — names files that became new defect-genus carriers during this turn. |
+| `changelog-reminder` | PreToolUse[Bash] on `git commit`: quietly reminds to add a CHANGELOG.md entry when the staged diff contains CODE changes AND CHANGELOG.md is not staged. |
+| `ci-check-reminder` | PostToolUse[Bash]: after `git push`, reminds to check the run for THIS commit. |
+| `claude-md-size-check` | PreToolUse[Bash] on `git commit`: quietly warns when CLAUDE.md grows past the context-cost threshold. |
+| `claudsoul-context-pointer` | UserPromptSubmit: injects the project CLAUDE.md status section when ClaudSoul is mentioned from outside its directory. |
+| `code-review-outcome` | PostToolUse[Bash] on `git commit`: confirms the commit actually happened before the guard's record enters the measurement denominator. |
+| `code-review-reminder` | PreToolUse[Bash] on `git commit`: a large code diff heading into a commit without an adversarial run — instructs to tell the interlocutor about `/adversary`. |
+| `commit-condition-notice` | PreToolUse[Bash] — names a commit that went (or goes) without its condition: a failed edit of its batch, or a `;` step. |
+| `commit-trap` | git `commit-msg`, `pre-commit` and `post-commit` traps: commit guards judge the commit git is about to make — in its repository, by its index and message — and a `commit-msg` bypass by its pass trace. |
+| `completion-gate` | Stop hook — a backlog item is judged by its own check command, not by the report; the debt queue runs by age — oldest first, an item opened in this session goes to the end. |
+| `declared-problem-recorded` | Stop hook — a problem named in the answer must reach a durable carrier (D103). |
+| `decompose-detector` | UserPromptSubmit: pre-execution router — suggests /decompose for multi-step requests, /grilling for open-decision/vague ones. |
+| `denied-branch-commit-guard` | PreToolUse[Bash] — a commit after a denied branch creation, while HEAD is not that branch, is denied once. |
+| `doc-impact-check` | PreToolUse[Bash] on `git commit`: names describing documents; demands a decision on state docs when behaviour changed. |
+| `docs-family-check` | PreToolUse blocker-tier: on a version bump, checks the 5-doc family is covered by the commit. |
+| `enrich-suggester` | UserPromptSubmit: hint when a recently-modified entity is sparse (fewer than 3 attributes). |
+| `error-tracker` | PreToolUse[Bash]: warns before a retry when 2+ of the last 6 tool calls failed. |
+| `external-correction-gap` | UserPromptSubmit: external review detection — demands a gap analysis (catchable by own knowledge?) before accepting third-party corrections. |
+| `five-whys-gate` | PreToolUse: a repeat signal fired but no why-chain was stated — demands the 5 Whys. |
+| `fix-level-check` | detects post-incident text-rule fixes in the agent's own reply and reminds to lift them to a mechanism (activator/blocker) |
+| `git-add-sweep-guard` | PreToolUse[Bash] — asks before `git add` stages untracked files the command never named. |
+| `git-stash-guard` | PreToolUse[Bash] — a working-copy-changing `git stash` (anything but list/show) is denied. |
+| `guarantee-map-guard` | PreToolUse on writes — refuse editing a file named by a skeptic finding of an in-progress guard-layer backlog item until a guarantee map with a run follows it. |
+| `impact-inject` | PreToolUse[Edit\|Write\|MultiEdit], PreToolUse[Bash] and PostToolUse[Bash] — on a file edit made by ANY route, injects the FULL dependency path from the project map: who stands on this file (tests, docs, knowledge, backlog items, defect genera, roots) and how many it stands on itself; a new file is entered into the map and said so, and if it lands in a COUNTED set (hooks, libraries, tests, skills, domains, bridges) the shifted document numbers are named together with the recount command; alongside, names what to run after saving. |
+| `inquiry-gap` | a user QUESTION gets an answer first — not a build; if the question exposes a missing mechanism, gap analysis comes before any construction. |
+| `install-drift-notice` | Stop hook — a fix that never reached ~/.claude does not run in the world. |
+| `internal-doc-leak-guard` | PreToolUse guard: prevents writing internally-marked content to externally-shared paths (lawyer / counsel / advisor folders). |
+| `intrusiveness-tracker` | UserPromptSubmit: maintains L6 intrusiveness gate state, classifies the interlocutor's state (focus/idle/stuck/exploration) and injects it into the context. |
+| `itr-event-detector` | UserPromptSubmit: finds a gentle suggestion in the assistant's prior turn, classifies whether the user accepted or ignored it, and logs the outcome — without this the L6 budgets never accumulate. |
+| `knowledge-activator` | PreToolUse[Bash\|Edit\|Write\|MultiEdit]: injects SESSION.md and relevant knowledge from global-lessons on the first tool call. |
+| `knowledge-audit-digest` | Weekly mechanical audit of global-lessons: counts, reliability distribution, FSRS buckets. |
+| `knowledge-capture-reminder` | PostToolUse[Bash]: reminds to collect material after N commits in the session when nothing was captured since the previous reminder. |
+| `knowledge-counter-bump` | mechanical increment of a knowledge item's confirmed/contradicted counters. |
+| `knowledge-frontmatter-check` | PostToolUse on knowledge writes, shell edits included: reports broken YAML frontmatter and missing required fields right after a knowledge file is written; the required set is derived from the contour's template. |
+| `knowledge-link-symmetry` | PostToolUse on knowledge writes, shell edits included — a case→pattern edge gets its back-reference written. |
+| `lib-prefix-guard` | PreToolUse on library writes — a new function must carry one of the prefixes declared in the file header. |
+| `mcp-orphan-reap` | SessionEnd reaper for orphaned stdio MCP servers (parent claude gone). |
+| `mechanism-has-consumer` | PreToolUse[Bash] on `git commit`: names a mechanism nobody invokes, before it is committed. |
+| `merge-root-gate` | PreToolUse[Bash] on `git merge` into main/master plus a git `commit-msg` trap in judged repositories — refuses a fix that enters the main branch, by merge or by a direct commit in any command form, without a backlog item carrying a root card, with a root probe not at zero and no named limit, or with test expectations changed without a stated reason. |
+| `metrics-collector` | called by auto-scanner / /knowledge-audit: computes knowledge-base health metrics, writes state/metrics.md. |
+| `module-context-inject` | PreToolUse[Edit\|Write\|MultiEdit] — on a file edit, injects the documentation module that describes it, the headings of its business rules and a reminder to update the module in the same commit; a file no module describes is named as such. |
+| `module-doc-check` | PreToolUse[Bash] on `git commit`: a NEW module staged without its module doc — a quiet reminder to add .claude-docs/modules/<name>.md. |
+| `name-consumer-notice` | PreToolUse on file writes (and the shell-write dispatcher): when an edit makes a file stop reading an environment variable, names the other files that still set it and call this file. |
+| `output-language-check` | Stop/PreCompact/UserPromptSubmit/PreToolUse: post-output scanner for mixed-alphabet tokens, surfaced on the next turn. |
+| `own-background-process-check` | Stop hook — names this session's background tasks that still listen on a TCP port at turn end. |
+| `own-frame-notice` | PreToolUse on Bash — building an ad-hoc measurement script prompts for the instrument that already records the fact. |
+| `partial-read-guard` | PostToolUse[Read]: states how much of a file was actually read, in lines. |
+| `pending-alerts-surface` | UserPromptSubmit: surfaces deferred alerts through a channel the UI reliably shows. |
+| `pipefail-grep-q-notice` | PreToolUse on writes — a pipe into `grep -q` under `set -o pipefail` whose exit status is checked gets reported before the file is written. |
+| `playwright-cli-guard` | PreToolUse: blocks throwaway Playwright scripts, hints on reading a run's screenshot, forcing the CLI instead (codegen / test / show-trace), and refuses editing a spec that failed on a page element until its error-context snapshot is read. |
+| `pre-compact-finalizer` | PreCompact: snapshots the chunk boundary before context compaction. |
+| `pre-compact-handoff` | PreCompact: preserves the thread of work before context compaction. |
+| `publish-guard` | PreToolUse — blocks an irreversible outward publish until a dry run is shown in the turn. |
+| `quality-gate-check` | PreToolUse: skill-contract guard on `git commit`. |
+| `reformulation-tracker` | UserPromptSubmit: cascading verification of predictions (FORWARD/PROPOSAL/BACKWARD), logs the outcome and prompts to record the gap. |
+| `relative-date-check` | Stop/PreCompact: flags relative time expressions ("вчера", "на днях", "час назад") written without an absolute date or clock-time anchor next to them; surfaces the correction plus the current date and time on the next turn. |
+| `replace-uniqueness-guard` | PreToolUse[Bash] — a python first-occurrence replace without counting the pattern is denied. |
+| `response-tracker` | PostToolUse: records the agent's REACTION after the system warned it about something. |
+| `revert-signal` | PostToolUse[Bash]: a revert or a repeated hotfix of the same file becomes an analysis trigger. |
+| `rework-detector` | PostToolUse (and PostToolUseFailure for Bash): second pass over the same file while every run looks green (a turnaround); edit targets come from the client's list of files the command changed, else from the world, not from the command's form. |
+| `rules-write-bypass` | PreToolUse[Bash] — the installed rules file may only be written through the merge library (D101). |
+| `running-file-edit-guard` | PreToolUse on writes — warns when the target shell script is being executed by a live process. |
+| `secret-guard` | PreToolUse[Edit\|Write\|MultiEdit]: a secret being written into a file is refused, not merely flagged. |
+| `semantic-prefetch` | UserPromptSubmit: background semantic-search prefetch keyed by the prompt topic and cwd. |
+| `session-collector` | Stop: reminds to record uncaptured lessons via /learn, finalises the session in the registry, cleans ephemeral state. |
+| `session-end` | SessionEnd: finalises the session in the registry on exit/clear/logout and removes it from active/. |
+| `session-start` | SessionStart: registers the session in the registry on startup/resume/clear/compact for cross-session visibility. |
+| `skill-name-ascii-guard` | PreToolUse[Bash] — a skill directory named outside ASCII is denied, not merely flagged. |
+| `skill-review-check` | PreToolUse: skill-review gate on `git commit`. |
+| `subagent-outcome` | SubagentStop: a subagent that ended without an answer becomes a root-cause trigger. |
+| `test-cost-notice` | PostToolUse on test writes — editing a test whose MEASURED cost exceeds the threshold reports that number and the ways to cut it. |
+| `test-exit-explicit-guard` | PreToolUse on test writes — refuse a test whose last non-empty line is not an explicit exit. |
+| `timestamp-canary-check` | Stop hook — verifies the last reply starts with the injected timestamp; alerts user+agent when the canary died (context drift). |
+| `timestamp-inject` | injects the user's current local time each prompt; the FINAL message of the turn must start with it, interim blocks must not carry it — a cheap context-drift canary. |
+| `tool-gate-check` | PostToolUse on hook writes — unguarded project-tool calls and brakeless Stop turn-restarts. |
+| `trust-guard` | PreToolUse: a destructive command issued without explicit user authorization in the recent turns is met with a question first (affect prosthetic #1 — the brake the architecture does not have). |
+| `undefined-function-check` | PostToolUse on shell-file writes: reports calls to functions defined nowhere in the tree or PATH. |
+| `user-correction-guard` | PreToolUse: pause when the user has just corrected me, before I take another tool action. |
+| `verdict-through-pipe-check` | PostToolUse[Bash]: output shows a test run in progress but carries no verdict line. |
+| `wakeup-author-mark` | PreToolUse[ScheduleWakeup]: records the checksum of the scheduled wakeup prompt so the submit-side filter treats that turn as not the owner's. |
+
+<!-- HOOKS-TABLE:END -->
+
+## Commands
+
+Skills are user-invocable workflows installed into `~/.claude/commands/`.
+
+<!-- SKILLS-TABLE:START -->
+
+| Command | What it does |
+|---------|-----------|
+| `/adversary` | Adversarial code review: a subagent in a clean context proves the code breaks, reproduces every attack as a failing test, and fixes nothing. Rounds, each with a fresh critic. Call before commit, deploy, handoff — especially when you are sure it is ready. |
+| `/bridge-health` | Monitors all 16 bridges (15 inter-layer plus one within-layer): status, activity metrics, health of links between cognitive layers. |
+| `/compile` | Batch consolidation of accumulated raw material into knowledge candidates — reads _drafts/SESSION/_capture, extracts 3-7 items, dedupes against the base (NEW/UPDATE/CONTRADICTS), writes drafts. |
+| `/decompose` | Decomposes a task before execution: scope → steps → dependencies → plan. For tasks longer than 3 steps. |
+| `/enrich` | Web enrichment of an entity from tier sources. Conflicts go into contradiction, nothing is overwritten. /enrich <name\|slug> or "update X". |
+| `/entity` | Shows what the ClaudSoul knowledge base knows about an entity (person, company, concept, event) — attributes, links, sources. |
+| `/grilling` | Relentless interview over a decision tree: surface silent assumptions in a plan/idea before acting. Rounds over the frontier, each question with a recommended answer, facts fetched by the agent itself. /grilling <plan or idea>. |
+| `/ingest` | Adds material to the ClaudSoul knowledge base (second learning contour). Run explicitly via /ingest or when the user supplies a document. |
+| `/init-project` | Sets up a project OR audits an already-initialised one: compares CLAUDE.md, SESSION.md, docs and memory against the current contract and names the gaps. Creates what is missing in a new project; in an existing one it only checks and never overwrites. |
+| `/knowledge-audit` | Audits the knowledge base: health metrics, reliability, decay, recommendations. Measures how the system grows. |
+| `/knowledge` | L2 knowledge coordinator: routes to /learn, /retro, /knowledge-audit, /bridge-health by context. Single entry point. |
+| `/learn` | Quick knowledge capture — auto-detects the type (error/success/communication), writes a case, checks for promotion to a pattern. |
+| `/narrative` | Override / forced regeneration of the project through-line brief. The main path is the auto-trigger in the session-start hook. |
+| `/pipeline` | L1 orchestrator: scope → plan (/decompose) → execute → quality gate (/quality-gate) → done. For tasks of any complexity. |
+| `/project-health` | Understand the project → health map → remediation plan in the right order → living tracker. Understanding first, fixing second. |
+| `/quality-gate` | Quality check before marking a task done: PASS / CONCERNS / FAIL / WAIVED. Definition of Done, tests, review. |
+| `/release` | Ship a project release: bump SemVer → CHANGELOG from conventional commits → sync README/CLAUDE.md → commit + tag. Applies the global `## Versioning discipline` rule. |
+| `/reload` | Re-reads the knowledge base and project context without restarting the session. Useful with parallel sessions. |
+| `/retro` | Post-fix retrospective — analyze what went wrong, extract lessons, update knowledge base with confidence weights. |
+| `/save` | Saves session progress to SESSION.md. Use during long sessions or before wrapping up. |
+| `/skill-forge` | Problem research → GitHub research → skill synthesis → solving the task. For complex tasks with no existing skill. |
+| `/skill-review` | Checks a SKILL.md against the ClaudSoul contract. Reports violations and proposes fixes. |
+| `/trajectory-prediction` | L4 (Thought Trajectory) + L6 (Prediction) methodology: tracking the interlocutor's line of thought, cascading hypothesis log, the say/stay-silent gate. |
+| `/wiki` | Wiki page for an entity: narrative plus links, laid out by entity_type. /wiki <name\|slug> or "tell me about X". Read-only. |
+
+<!-- SKILLS-TABLE:END -->

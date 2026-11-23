@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# СУДИТ: scripts/doc-figures.sh
+# test_doc_status_consistency.sh — статус, объявленный в документе дважды, сверяется с
+# владельцем, и расхождение между двумя объявлениями КРАСНЕЕТ.
+#
+# Результат: разбивка мостов по статусам живёт в трёх документах (docs/architecture.md
+#            таблицей и прозой, CLAUDE.md §5 строкой) и у одного владельца
+#            (bridges/_index.md §Статистика); подмена в любом носителе даёт расхождение.
+# Проверка результата: bash hooks/tests/test_doc_status_consistency.sh даёт 0
+#
+# Повод — D384 (10-11 сентября 2026). `docs/architecture.md:2230` говорил «Все 16 мостов
+# формализованы», а таблица четырьмя строками ниже — «📐 Формализован | 1». Оба утверждения
+# были верны по своим предметам («есть файл» и «статус реализации») и несовместимы на вид:
+# одно слово несло два предмета (корень R6). Сверщик чисел молчал, потому что первое
+# объявление было СЛОВЕСНЫМ и в реестр `doc-claims.tsv` не входило.
+#
+# Ноги держат ОБЕ стороны различения: без T2 тест зеленел бы у реестра, который про мосты
+# не знает вовсе.
+set -uo pipefail
+REPO="$(cd "$(dirname "$0")/../.." && pwd)"
+PASS=0; FAIL=0
+ok()  { PASS=$((PASS+1)); }
+bad() { FAIL=$((FAIL+1)); echo "FAIL [$1]: $2"; }
+
+command -v git >/dev/null 2>&1 || { echo "нет git — пропуск"; exit 0; }
+
+W=$(mktemp -d)
+( cd "$REPO" && git archive HEAD ) 2>/dev/null | tar -x -C "$W" 2>/dev/null || { echo "подготовка мира не удалась: hooks/tests/test_doc_status_consistency.sh:$LINENO" >&2; exit 1; }
+# рабочие копии поверх снимка: предмет теста — нынешнее состояние, а не закоммиченное
+for f in scripts/doc-claims.tsv scripts/doc-figures.sh docs/architecture.md CLAUDE.md bridges/_index.md; do
+    cp "$REPO/$f" "$W/$f" 2>/dev/null || { echo "подготовка мира не удалась: hooks/tests/test_doc_status_consistency.sh:$LINENO" >&2; exit 1; }
+done
+
+# Вывод берётся в переменную, а не через пайп в grep: под `pipefail` ранний выход
+# `grep -q` шлёт сверщику SIGPIPE, статус пайпа становится 141, и зелёная проверка
+# читается как красная. Поймано на этом же тесте 11 сентября 2026 (T2-T4 разом).
+# Реестр СУЖАЕТСЯ до строк про мосты через DOC_CLAIMS_FILE. Полный реестр тут брать нельзя,
+# и это измерено: среди его ~100 ключей есть такие, что сами ЗАПУСКАЮТ прогоны (ключи
+# tests_*, drift_check_pairs), поэтому четыре сверки подряд превращали тест в минуты. А
+# «Проверка» пункта D384 зовёт этот тест — и через неё замедление расходилось на всех, кто
+# прогоняет проверки бэклога: 11 сентября 2026 шесть тестов набора разом ушли в таймаут
+# 120 с, будучи зелёными на HEAD. Предмет теста — пять строк реестра, их и сверяем.
+grep 'bridges' "$REPO/scripts/doc-claims.tsv" > "$W/claims-bridges.tsv"
+[ -s "$W/claims-bridges.tsv" ] || { echo "FAIL: в реестре нет ни одной строки про мосты"; exit 1; }
+
+check() { ( cd "$W" && CLAUDSOUL_REPO="$W" DOC_CLAIMS_FILE="$W/claims-bridges.tsv" \
+             bash scripts/docs-refresh-claims.sh --check 2>&1 ); }
+
+# --- T1: честное дерево → про мосты сверщик молчит ---
+N1=$(grep -ci 'мост' <<<"$(check)")
+[ "${N1:-1}" -eq 0 ] && ok \
+    || bad T1 "на честном дереве сверщик дал $N1 расхождений по мостам"
+
+# --- T2: подмена в таблице architecture.md → обязан покраснеть ---
+sed -i.bak 's/| 📐 Формализован | 1 |/| 📐 Формализован | 9 |/' "$W/docs/architecture.md"
+grep -qi 'формализ' <<<"$(check)" && ok \
+    || bad T2 "подмена статуса в таблице architecture.md прошла молча"
+mv "$W/docs/architecture.md.bak" "$W/docs/architecture.md"
+
+# --- T3: подмена в ПРОЗЕ того же документа → обязан покраснеть ---
+# Ровно исходный дефект D384: расходились таблица и абзац рядом, а не документ и мир.
+sed -i.bak 's/и таких мостов 1/и таких мостов 16/' "$W/docs/architecture.md"
+grep -qi 'прозой' <<<"$(check)" && ok \
+    || bad T3 "расхождение прозы с таблицей внутри одного документа прошло молча"
+mv "$W/docs/architecture.md.bak" "$W/docs/architecture.md"
+
+# --- T4: подмена у третьего носителя, CLAUDE.md §5 → обязан покраснеть ---
+sed -i.bak 's/1 формализован/9 формализован/' "$W/CLAUDE.md"
+grep -qi 'разбивка мостов' <<<"$(check)" && ok \
+    || bad T4 "подмена разбивки в CLAUDE.md §5 прошла молча"
+mv "$W/CLAUDE.md.bak" "$W/CLAUDE.md"
+
+rm -rf "$W" 2>/dev/null
+echo "doc status consistency: PASS=$PASS FAIL=$FAIL"
+exit $(( FAIL != 0 ))

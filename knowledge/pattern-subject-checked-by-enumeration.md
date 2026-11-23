@@ -1,0 +1,121 @@
+---
+name: "Предмет проверяется перечнем форм, а имеет правило"
+description: "Проверка перечисляет известные формы нарушения вместо того, чтобы выражать порождающее их правило; перечень неполон по построению, и дефект возвращается столько раз, сколько у него форм"
+type: pattern
+outcome: error
+confidence: 3
+impact: 5
+intensity: 3
+confirmed_count: 1
+contradicted_count: 0
+last_confirmed: 2026-10-31
+promotion_tier: 2
+scope: universal
+source_cases:
+  - case-2026-10-31-fixture-forms-from-own-model-three-rounds.md
+  - case-2026-10-30-rule-checked-on-one-element-third-time.md
+  - case-2026-10-30-boundary-consumers-not-enumerated-twice.md
+  - case-2026-10-29-promise-regex-legs-three-owners.md
+  - case-2026-10-25-enumerate-then-suppress-misses-scopes.md
+  - case-2026-10-25-oracle-by-execution-replaced-form-list.md
+  - case-2026-10-25-command-form-predicate-checked-by-examples-regressed-each-round.md
+  - case-2026-08-27-training-input-not-checked-for-authorship.md
+  - case-2026-07-29-signal-enumerates-cannot-predicate
+  - case-2026-08-23-examples-vs-oracle-in-parser-review
+  - case-2026-08-25-showcase-doc-as-instrument
+  - case-2026-08-27-training-input-not-checked-for-authorship
+  - case-2026-08-28-enforcement-is-a-property-of-consequence.md
+  - case-2026-08-29-fix-addressed-to-artifact-not-subject.md
+  - case-2026-08-29-check-shares-blind-spot-with-checked.md
+source_session: ""
+status: active
+
+domain: [verification, testing, agent_design, shell, parsing]
+situation: "построение проверки, детектора или стража"
+trigger: "починка дефекта того же класса второй или третий раз подряд"
+stakes: "recurring_defect"
+actors: [system]
+environment: multi_session
+circumstances: "формы нарушения обнаруживаются по одной, каждая после срабатывания"
+purpose: learning
+method: automated
+tags: [enumeration, predicate, oracle, completeness, recurring, detection]
+
+need: "stop_recurring_defect_by_naming_its_rule"
+urgency: "when_relevant"
+availability: "unique"
+
+related: [principle-completeness-over-speed, pattern-multi-round-adversarial-review]
+edges:
+  - similar_to: pattern-multi-round-adversarial-review
+  - specializes: principle-completeness-over-speed
+
+origin: solo
+preceded_artifact: "no"
+provenance_log:
+  - date: 2026-08-27
+    kind: reinforced
+    reason: "Фильтр захвата промптов (activity-flush-lib.sh:107) перечисляет теги системных ходов вместо предиката is_non_user_turn, который для этого и заведён. Перечень неполон по построению: 734 из 1218 строк обучающего входа за 23–27.08 несут маркеры, которых в нём нет; отсев к тому же стоит только на одной из двух веток разбора content"
+    trigger_case: case-2026-08-27-training-input-not-checked-for-authorship.md
+    session: ""
+  - date: 2026-08-27
+    kind: reinforced
+    reason: "сигнал находки в five-whys-gate сделан перечнем из 17 форм слова; собственный текст находки («это мой собственный дефект») не совпал ни с одной — перечень неполон по построению, как и говорит правило"
+    session: ""
+  - date: 2026-08-28
+    kind: reinforced
+    reason: "Признак «продюсер со словарём» построил перечнем форм (PATTERNS=(, встроенный grep) и пропустил user-correction-guard — ТОТ САМЫЙ хук, ради которого проверка писалась: словарь у него в переменной CORRECTION_REGEX. Заменил на наблюдаемое: grep применяется к переменной с речью собеседника."
+    session: ""
+  - date: 2026-08-28
+    kind: reinforced
+    reason: "Три случая за сутки, все в коде того же дня: признак находки промахнулся на «поймал», контракт инструмента засчитал строку внутри docstring, признак записи поймал > внутри 2>&1 и отказал в чтении. Корень найден: нет обязательного шага «назови случай, который признак пропустит»; заведён контракт КОНТРПРИМЕР."
+    session: ""
+  - date: 2026-08-28
+    kind: reinforced
+    reason: "канарейка контекста: признак с формы ответа, утверждение об источнике"
+    session: ""
+  - date: 2026-08-28
+    kind: reinforced
+    reason: "признак сгруппирован по теме знания, а не по последствию вызова; вид команды выбирала библиотека, а не предикат"
+    session: ""
+  - date: 2026-10-25
+    kind: reinforced
+    reason: "25.10 D1084–D1086: предикат «команда добавляет всё» перечнем форм по тексту команды — каждый раунд скептика находил регрессию против прежней редакции; эталон (git+bash в песочнице) не применён; второй владелец предиката в changelog-reminder.sh:34 уже разошёлся"
+    session: ""
+  - date: 2026-10-28
+    kind: reinforced
+    reason: "защита перечнем опасных настроек слепа к подмодулю; -c слабее submodule.ignore (ClaudSoul D1094/D1095, 25.10)"
+    trigger_case: case-2026-10-25-enumerate-then-suppress-misses-scopes.md
+    session: ""
+  - date: 2026-10-30
+    kind: reinforced
+    reason: "D1152: два круга чинили признак по примерам скептика, дефект вернулся на классе; закрыл один список форм с примерами"
+    trigger_case: case-2026-10-29-promise-regex-legs-three-owners.md
+    session: ""
+  - date: 2026-10-30
+    kind: reinforced
+    reason: "D1042 r7: элемент класса ($(( ) не перечислен до правки — M1 скептика"
+    trigger_case: case-2026-10-30-rule-checked-on-one-element-third-time
+    session: ""
+  - date: 2026-10-31
+    kind: reinforced
+    reason: "D1149: формы записей фикстуры перечислены по модели — дефект вернулся трижды, по числу осей формы"
+    trigger_case: case-2026-10-31-fixture-forms-from-own-model-three-rounds.md
+    session: ""
+detection_signals:
+  where: "путь изменяемого файла + содержимое правки (tool_input у Edit/Write/MultiEdit)"
+  form: "tool ∈ {Edit, Write, MultiEdit} И file_path ~ ERE `/(hooks|scripts)/[^/]+\\.(sh|py)$` И file_path НЕ содержит `/tests/` И в tool_input есть перечень-альтернация из ≥6 элементов, где элементы — голые словоформы (нет `/`, `*`, `.`, ведущего `-`) и ≥3 из них содержат не-ASCII байты. Реализация двумя матчерами через all_of: {\"tool_input_regex\": \"[^|\\\"' ,()=]{2,}(\\\\|[^|\\\"' ,()=]{2,}){5,}\"} + требование не-ASCII байта внутри найденной области (тот же байтовый приём, что у skill-name-ascii-guard; LC_ALL=C обязателен). ЗАМЕР: 2 срабатывания на 6375 правок корпуса — user-correction-guard.sh и five-whys-gate.sh, ОБА названы манифестациями в provenance_log самого знания; на нынешнем дереве 3 носителя из 100 файлов хуков (five-whys-gate, trust-guard, user-correction-guard), ложных нет. Из 21 файла с длинными альтернациями признак верно молчит на 18."
+  consequence: "Проверка, чей предмет — открытый словарь живой речи, молчит на всякой форме, которой нет в списке, и её молчание читается как «нарушений нет»: класс возвращается столько раз, сколько у него форм (ровно то, что произошло с DISCOVERY_RE в five-whys-gate и со словарём поправок в user-correction-guard)."
+  counterexample: "hooks/code-review-reminder.sh: `CODE_REVIEW_EXT=\"ts|tsx|js|jsx|mjs|cjs|py|sh|bash|go|rs|rb|java|kt|php\"` — 15 альтернатив, но словарь ЗАКРЫТ и принадлежит системе (расширения), ловить нельзя. То же для `backlog-touch-check.sh` (`CHANGELOG.md|SESSION.md|BACKLOG.md|…` — собственные документы) и `playwright-cli-guard.sh` (`test|codegen|show-trace|…` — собственные подкоманды). Отдельно: разовый `grep -E \"слово|слово|…\"` в Bash-вызове — в корпусе таких 72, все разбор данных, а не строящаяся проверка; Limitations знания их исключают прямо («к одноразовым проверкам не относится»), поэтому Bash в признак не входит."
+  status: "ИЗМЕРЕНО 2026-09-06 (второй замер, независимый от первого): 3 срабатывания на 7620 действий над файлами (0,039%), ложных 0. Настоящие: internal-doc-leak-guard.sh:76,130 (перечень имён профессии и формулировок разрешения — открытый словарь речи), five-whys-gate.sh:317, user-correction-guard.sh:127,214 — последние два знание уже называло манифестациями. Все три контрпримера подтверждены молчанием: code-review-reminder (расширения файлов), backlog-touch-check (имена своих документов), playwright-cli-guard (свои подкоманды) не сработали ни разу. Выборка мала (3), поэтому точность 3/3 читается как «ложных не найдено», а не как доказанные 100%."
+instrument_verdict: inexpressible   # перечень от порождающего правила по входу вызова не отличить: альтернации в коде законны; проба R3 только считает места (147, из 21 прочитанного симптом у 9) — измеритель, не страж
+instrument_assessed: 2026-11-10
+---
+
+Если дефект одного класса чинится второй раз — останови починку и спроси, чем описан предмет проверки: перечнем известных форм или правилом, которое их порождает. Перечень неполон по построению: он растёт ровно на одну строку за каждое срабатывание, а формы кончаются позже, чем терпение. Правило проверяется обходом, перечень — примерами, и у проверки примерами нет понятия полноты.
+
+**Why:** Наблюдение сложилось из трёх независимых случаев. Сигнал детекции блокера перечислял известные команды и не сработал ни разу, когда тот же класс дал четыре новые формы за сессию. Три раунда адверсариальной критики давали новое каждый раз, потому что предмет был построен как обработка текста, а является парсером, и список примеров для него полноты не имеет. Обход shell-дефекта гасил «комментарии» и «данные» эвристиками — противник снял их с четырёх сторон за один заход, потому что предмет был назван текстом, а является синтаксисом оболочки.
+
+**How to apply:** Признак — повтор, а не тяжесть: второй заход на один класс важнее, чем severity первого. Три хода, в порядке предпочтения. Первый: найти эталон там же, где предмет (для парсера — сам разборщик, для синтаксиса — сама оболочка), и сверяться с ним, а не с ожиданиями автора. Второй: инвертировать перечень в отрицание — вместо списка того, чем нарушение бывает, описать то, чем бывает норма. Третий, самый сильный: снять вопрос целиком, сделав починку не зависящей от контекста — тогда и правилу контекст знать незачем.
+
+**Limitations:** К одноразовым проверкам не относится: если класс проявился однажды и предмет узкий, перечень дешевле и достаточен. Инверсия в отрицание переносит неполноту на другую сторону — список того, что считается нормой, тоже конечен, и его надо проверять на ложные тревоги. Правило дороже перечня в написании и требует собственных тестов на «умеет ли краснеть».

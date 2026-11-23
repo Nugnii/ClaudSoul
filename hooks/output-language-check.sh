@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+# output-language-check.sh — Stop/PreCompact/UserPromptSubmit/PreToolUse: находит в ответе слова со смешением алфавитов и показывает их следующим ходом.
+# en: Stop/PreCompact/UserPromptSubmit/PreToolUse: post-output scanner for mixed-alphabet tokens, surfaced on the next turn.
+#
+# Purpose:
+#   Closes the L1 gap for output-level rules. Memory file
+#   `feedback_pure_language_no_alphabet_mixing.md` forbids tokens mixing
+#   Cyrillic and Latin letters in one word (e.g. "trёх", "fix'ом", "лookup'ов").
+#   The rule lives as passive feedback in project memory and depends on the
+#   agent remembering to proofread — which fails in practice (2 recorded
+#   incidents: enrich v0.5.0 "лookup'ов"; 2026-04-24 "trёх").
+#
+#   Claude Code hook events do not include "BeforeAssistantMessage", so the
+#   violation cannot be blocked pre-delivery. This hook implements level 2
+#   (activator injection) of principle-knowledge-in-the-world:
+#
+#   - On Stop / PreCompact: scan last assistant message, persist violations
+#     to state/output-violations-${SID}.jsonl.
+#   - On UserPromptSubmit: if pending violations exist, inject context via
+#     hookSpecificOutput.additionalContext so the agent acknowledges the
+#     violation in the next response and avoids repetition in-session.
+#   - On PreToolUse: the same surfacing (channel 2b) — a turn that starts with a
+#     tool call and no prompt would otherwise never see the pending list.
+#
+# Scope:
+#   Per-speaker rule (this user explicitly forbids alphabet mixing in feedback
+#   memory). Detection is cheap and static — runs on every turn close without
+#   LLM cost. Cap list at 10 tokens to keep injection bounded.
+#
+# Exclusions (to avoid false positives):
+#   - Fenced code blocks and inline code
+#   - Filesystem paths (contain "/")
+#   - URLs (http://, https://, mailto:)
+#   - Identifier-like tokens (contain "@", ":", digits + letters, "_")
+#
+# Silent degradation: missing jq/python3, unreadable transcript, empty
+# content — exit 0 without output. Never block the turn.
+
+set -eo pipefail
+
+HOOK_NAME="output-language-check"
+PATHS_LIB="${PATHS_LIB:-$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/paths-lib.sh}"
+if [ -f "$PATHS_LIB" ]; then source "$PATHS_LIB"; else : "${STATE_DIR:=$HOME/.claude/hooks/state}"; fi
+# Окно текущего хода (D498): последний ответ ищется в расшифровке от последней реплики
+# владельца, а не во всей сессии. Библиотеки нет — окно вырождается в файл целиком.
+INPUT_LIB="${INPUT_LIB:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)/hook-input-lib.sh}"
+[ -f "$INPUT_LIB" ] || INPUT_LIB="$HOME/.claude/hooks/hook-input-lib.sh"
+# shellcheck source=/dev/null
+if [ -f "$INPUT_LIB" ]; then . "$INPUT_LIB"; fi
+# Общий замок и правка под ним (род H): файл нарушений общий на сессию.
+STATE_LOCK_LIB="${STATE_LOCK_LIB:-$(cd "$(dirname "${BASH_SOURCE[0]:-$0}")" 2>/dev/null && pwd)/state-lock-lib.sh}"
+[ -f "$STATE_LOCK_LIB" ] || STATE_LOCK_LIB="$HOME/.claude/hooks/state-lock-lib.sh"
+# shellcheck source=/dev/null
+if [ -f "$STATE_LOCK_LIB" ]; then . "$STATE_LOCK_LIB"; fi
+mkdir -p "$STATE_DIR"
+
+command -v jq >/dev/null 2>&1 || exit 0
+command -v python3 >/dev/null 2>&1 || exit 0
+
+HOOK_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+DETECTOR="${HOOK_DIR}/lib/output-language-detect.py"
+[ -f "$DETECTOR" ] || exit 0
+
+INPUT=$(cat)
+EVENT=$(printf '%s' "$INPUT" | jq -r '.hook_event_name // empty' 2>/dev/null)
+SID=$(printf '%s' "$INPUT" | jq -r '.session_id // empty' 2>/dev/null)
+TRANSCRIPT_PATH=$(printf '%s' "$INPUT" | jq -r '.transcript_path // empty' 2>/dev/null)
+
+[ -z "$SID" ] && exit 0
+VIOLATIONS_FILE="${STATE_DIR}/output-violations-${SID}.jsonl"
+
+scan_and_persist() {
+    [ -n "$TRANSCRIPT_PATH" ] && [ -f "$TRANSCRIPT_PATH" ] || return 0
+
+    # Ход берётся из окна хода библиотеки ввода (D1153). Помощника `transcript_turn_window` нет (файла библиотеки нет) —
+    # не судить: окном был бы весь файл, и находки прошлых ходов судились бы заново. У старой редакции помощник есть и
+    # окно начинается с последней реплики владельца: без ядра `HIL_TURN_USER_JQ` его запасное `false` оставляет окно
+    # одним ходом — текущим (скептик, третий круг, M1: охрана по ядру глушила этот верный суд).
+    command -v transcript_turn_window >/dev/null 2>&1 || return 0
+    local last_assistant lam
+    # Итог из поля входа Stop достраивает окно, если файл расшифровки его не догнал (D1210, `with_final` библиотеки ввода).
+    lam=$(command -v transcript_final_text >/dev/null 2>&1 && transcript_final_text "$INPUT") || lam=""
+    last_assistant=$(transcript_turn_window "$TRANSCRIPT_PATH" wide | jq -s --arg lam "$lam" "${HIL_TURN_USER_JQ:-def turn_user: false;}${HIL_WITH_FINAL_JQ:-def with_final(l): .;}"'
+        def role(x): x.message.role // x.role // "";
+        def get_text(x):
+            (x.message.content // x.content // []) as $c |
+            if ($c | type) == "array" then
+                ($c | map(select(.type == "text") | .text) | join("\n"))
+            elif ($c | type) == "string" then $c
+            else "" end;
+        with_final($lam) | . as $items | (length) as $n |
+        ([range(0; $n) | ($n - 1 - .)
+          | select($items[.] | turn_user)]
+          | first) as $pu |
+        if $pu == null then
+            ([range(0; $n) | $items[.] | select(role(.) == "assistant")]
+             | map(get_text(.)) | map(select(. != "")) | join("\n"))
+        else
+            ([range($pu + 1; $n) | $items[.] | select(role(.) == "assistant")]
+             | map(get_text(.)) | map(select(. != "")) | join("\n"))
+        end
+    ' 2>/dev/null | jq -r '.' 2>/dev/null)
+
+    [ -z "$last_assistant" ] && return 0
+    [ "$last_assistant" = "null" ] && return 0
+
+    local violations
+    violations=$(printf '%s' "$last_assistant" | python3 "$DETECTOR" 2>/dev/null)
+
+    [ -z "$violations" ] && return 0
+
+    local ts
+    ts=$(date -u +%Y-%m-%dT%H:%M:%SZ)
+    while IFS= read -r token; do
+        [ -z "$token" ] && continue
+        # Dedup against already-recorded tokens (any status) for this session
+        if [ -f "$VIOLATIONS_FILE" ]; then
+            if jq -e --arg t "$token" 'select(.token==$t)' "$VIOLATIONS_FILE" >/dev/null 2>&1; then
+                continue
+            fi
+        fi
+        jq -cn \
+            --arg ts "$ts" --arg sid "$SID" --arg token "$token" --arg event "$EVENT" \
+            '{ts:$ts, sid:$sid, event:$event, token:$token, status:"pending"}' \
+            >> "$VIOLATIONS_FILE" 2>/dev/null || true
+    done <<< "$violations"
+}
+
+surface_pending() {
+    # ОЧЕРЕДЬ ПРИНАДЛЕЖИТ РОДИТЕЛЮ (D456). Находка — про речь основной сессии, а
+    # `surface_pending` не только показывает, но и ГАСИТ: переводит `pending` в `surfaced`.
+    # Вызов субагента приходит с тем же `session_id`, поэтому чужая находка расходовалась им
+    # — показывалась не тому и пропадала для родителя безвозвратно. Признак актора берётся у
+    # владельца (`resolve_actor_id`, `hooks/paths-lib.sh`); библиотеки нет — прежнее
+    # поведение. Родитель покажет находку на своём следующем событии.
+    if command -v resolve_actor_id >/dev/null 2>&1 && [ -n "$(resolve_actor_id "${INPUT:-}")" ]; then
+        return 0
+    fi
+    # $1 — hookEventName for the output envelope (UserPromptSubmit | PreToolUse).
+    # Same surface logic on both events; first-to-fire marks tokens surfaced,
+    # subsequent calls see no pending and exit silent. This is level 2b
+    # (PreToolUse channel) layered on level 2a (UserPromptSubmit channel) —
+    # PreToolUse fires more often, closing the latency gap during multi-message
+    # work bursts (case-2026-04-25-level-2-feedback-latency).
+    local event_name="${1:-UserPromptSubmit}"
+
+    [ -f "$VIOLATIONS_FILE" ] || return 0
+
+    local pending
+    # лимит внутри awk, не `| head`: head выходит раньше, awk/jq ловят SIGPIPE 141,
+    # и под set -eo pipefail хук гибнет до инжекта (D239; идиом metrics-collector:395)
+    pending=$(jq -r 'select(.status=="pending") | .token' "$VIOLATIONS_FILE" 2>/dev/null \
+              | awk '!seen[$0]++ && n<10 {print; n++}')
+    [ -z "$pending" ] && return 0
+
+    local token_list
+    token_list=$(printf '%s' "$pending" | awk 'BEGIN{ORS=""} NR>1{printf ", "} {printf "%s", $0}')
+    [ -z "$token_list" ] && return 0
+
+    local msg
+    msg="🔤 Output language check: в предыдущем ответе обнаружены токены со смешением алфавитов — ${token_list}. Правило feedback_pure_language_no_alphabet_mixing: писать чисто по-русски или чисто латиницей, не смешивать в одном слове. Исправь в следующем ответе и не повторяй в текущей сессии."
+
+    jq -cn --arg msg "$msg" --arg ev "$event_name" \
+        '{hookSpecificOutput: {hookEventName: $ev, additionalContext: $msg}}'
+
+    # Mark surfaced tokens so we don't re-inject on every event.
+    atomic_filter "$VIOLATIONS_FILE" jq -c 'if .status=="pending" then .status="surfaced" else . end' || true
+}
+
+case "$EVENT" in
+    Stop|PreCompact)
+        scan_and_persist
+        ;;
+    UserPromptSubmit)
+        surface_pending "UserPromptSubmit"
+        ;;
+    PreToolUse)
+        surface_pending "PreToolUse"
+        ;;
+esac
+
+exit 0

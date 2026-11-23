@@ -1,0 +1,262 @@
+---
+name: Признак снят с вида текста, а различать надо его роль
+description: Предикат, опознающий подстроку, засчитывает данные за операцию, потому что вид текста у употребления и у упоминания одинаков по построению; роль задаётся позицией и обрамлением, и выбирается по тому, что признак утверждает
+type: pattern
+outcome: error
+confidence: 2
+impact: 4
+intensity: 4
+confirmed_count: 1
+contradicted_count: 0
+last_confirmed: 2026-11-23
+source_cases:
+  - case-2026-11-23-mod-took-request-copy-for-background-launch.md
+  - case-2026-11-06-normalization-ignores-input-role-of-char.md
+  - case-2026-10-28-dependency-by-mention-not-by-wiring.md
+  - case-2026-10-24-prose-outcome-guessing-replaced-by-explicit-marker.md
+  - case-2026-09-14-one-edge-kind-carried-four-roles.md
+  - case-2026-09-14-historical-address-written-in-live-form.md
+  - case-2026-09-13-wait-loop-matched-itself-and-never-exited.md
+  - case-2026-09-13-name-with-many-owners-attributed-to-one.md
+  - case-2026-09-13-form-proxy-bypassed-by-ordinary-wrapping.md
+  - case-2026-09-12-registry-listed-the-universe-library-as-a-carrier-of-its-own-genus.md
+  - case-2026-09-06-observer-enters-its-own-universe.md
+  - case-2026-09-05-fix-carries-the-genus-it-repairs.md
+  - case-2026-08-28-marker-without-anchor-is-not-a-marker.md
+  - case-2026-08-07-ban-description-contains-banned-token.md
+  - case-2026-08-23-narrow-fix-breaks-common-form.md
+  - case-2026-09-05-process-check-matches-its-own-command-line.md
+  - case-2026-09-05-closure-checked-by-an-instrument-weaker-than-the-writer.md
+source_session: ""
+status: active
+
+domain: [detector_design, parsing, shell, agent_design, guards]
+situation: заводится признак, опознающий подстроку в тексте команды, документа или реплики
+trigger: страж отказал на чтении; парсер взял не ту строку; цитата правила засчитана как его исполнение
+stakes: ложный отказ останавливает работу и начинает обходиться не думая, ложный пропуск исполняет чужие данные
+actors: [agent, guard, parser]
+environment: claudsoul, стражи PreToolUse и разборщики документов проекта
+circumstances: механизм и его описание живут в одном дереве, поэтому текст про признак попадает под сам признак
+purpose: correctness
+method: measurement
+tags: [use_vs_mention, anchor, guard, false_positive, self_reference]
+
+volatile_anchors: []
+self_altering: "Запись объясняет признаки словами, которые сама описывает: текст этого знания обязан проходить собственную проверку — прогони по нему признаки, о которых он говорит"
+
+need: avoid_regression
+urgency: soon
+availability: always
+
+related:
+  - case-2026-08-28-marker-without-anchor-is-not-a-marker
+  - case-2026-08-07-ban-description-contains-banned-token
+  - case-2026-08-23-narrow-fix-breaks-common-form
+  - case-2026-08-07-denial-targets-command-string-not-intent
+  - pattern-guard-scope-blindness
+edges:
+  - specializes: pattern-subject-of-measurement-mismatch.md
+  - similar_to: pattern-subject-checked-by-enumeration.md
+  - similar_to: pattern-guard-scope-blindness.md
+
+origin: co-cognition
+trigger_for_co_cognition: contradiction
+bridge_layer: L2-L5
+preceded_artifact: "no"
+
+promotion_tier: 2
+scope: universal
+origin_domain: detector_design
+
+modification_history: []
+provenance_log:
+  - date: 2026-09-01
+    kind: promoted
+    reason: "Четыре проявления за одну сессию поверх трёх родительских кейсов: путь к правилам в исходнике питона принят за запись (три ложных отказа), литерал строки контракта в обратных кавычках принят за контракт, цитата доктрины засчитана как разбор, команда из чужого BACKLOG.md исполнена"
+    session: ""
+  - date: 2026-09-02
+    kind: reinforced
+    reason: "D272: мета-тест засчитывал строку ОПРЕДЕЛЕНИЯ хелпера за доказательство срабатывания — 9 стражей из 47; починка ровно та, что предписывает знание (роль строки вместо вида текста), и она же понадобилась в привязке теста к стражу"
+    session: ""
+  - date: 2026-09-05
+    kind: reinforced
+    reason: "Дважды за ход по делу: первое правило освобождения смотрело на УПОМИНАНИЕ пути вместо его РОЛИ (цель записи), и сам признак IS_WRITE отвечает на форму «пишет», а утверждение делается о роли «меняет проект»"
+    session: ""
+  - date: 2026-09-05
+    kind: reinforced
+    reason: "Замок базы знаний имел три разных имени: каталог, файл, никакого — признак защиты был снят с ВИДА замка, а роль (сериализует ли он тех же писателей) не различалась"
+    session: ""
+  - date: 2026-09-05
+    kind: reinforced
+    reason: "за один ход 4 утверждения о коде добыты грепом без открытия места, и все 4 оказались неверны: фильтр || echo, ps|grep, grep -i mcp, «оба читателя отбирают по said|muted» — совпадение по тексту принято за совпадение по роли"
+    session: ""
+  - date: 2026-09-05
+    kind: reinforced
+    reason: "признак места вставки снят с формы записи ^source_cases:s*$ — на flow-форме заводился второй ключ; 10 родителей из 50"
+    trigger_case: case-2026-09-05-closure-checked-by-an-instrument-weaker-than-the-writer.md
+    session: ""
+  - date: 2026-09-05
+    kind: reinforced
+    reason: "пять проявлений за сутки; три из них — в приборах, писавшихся ради починки этого же рода"
+    trigger_case: case-2026-09-05-closure-checked-by-an-instrument-weaker-than-the-writer.md
+    session: ""
+  - date: 2026-09-05
+    kind: reinforced
+    reason: "проявление 5 сентября: имя инструмента (форма вызова) стояло вместо роли (файл изменён); признак рода J снят с роли и проверен контрпримером PreToolUse"
+    session: ""
+  - date: 2026-09-06
+    kind: reinforced
+    reason: "объявил «44 хука — одно устройство в копиях», взяв за суть общую ПРЕАМБУЛУ (jq 44/44, payload 43/44, библиотека 42/44) — то есть форму. Замер шестью агентами по всем 44 файлам: сводятся к паре «признак → текст» 2, частично 10, не сводится 32; работа у каждого своя (вычисление по расшифровке, исполнение команд, обход диалога, сравнение множеств, кросс-событийность)"
+    session: ""
+  - date: 2026-09-07
+    kind: reinforced
+    reason: "пятое за сутки проявление, и оно на мне: клауза класса 5 искала bFAILb и поймала FAIL: внутри образца для grep в doc-figures.sh — слово было данными, а не вызовом. Сужение до форм вызова вернуло настоящего носителя"
+    session: ""
+  - date: 2026-09-07
+    kind: reinforced
+    reason: "три моих «Проверки» подряд были сняты с ФОРМЫ починки, а не со свойства, и краснели после верной работы: D352 грепала имена переменных, D351 искала строчными напечатанное заглавными, D353 требовала слово в той же строке else. Лечится поведенческой проверкой"
+    session: ""
+  - date: 2026-09-10
+    kind: reinforced
+    reason: "критерий разбора требовал адрес формой файл:строка; у разбора с непрограммным предметом (бэклог) адресами были номера пунктов, addr=0 при why=9/roots=19/heads=2 — отказ стал неснимаемым, девять подряд. Починено 10 сентября 2026: три пространства адресации"
+    session: ""
+  - date: 2026-09-12
+    kind: reinforced
+    reason: "признак рода F читал форму строки, вывод множества жил в вызываемой функции и argv-форме"
+    trigger_case: case-2026-09-12-registry-listed-the-universe-library-as-a-carrier-of-its-own-genus.md
+    session: ""
+  - date: 2026-09-12
+    kind: reinforced
+    reason: "фильтр итогов CI по форме «N passed, M failed» увидел 8 красных из 12: у четырёх итог иной формы («36/36 passed», «прошло 4, провалено 2», голые ✅/❌) — роль (строка FAILED: раннера) была рядом"
+    session: ""
+  - date: 2026-09-12
+    kind: reinforced
+    reason: "сторож скобок test_case_folding_portable 1b сверял (sed|grep) по имени команды и пропустил тот же дефект в awk — признак на форме, а роль «регулярное выражение со скобкой»"
+    session: ""
+  - date: 2026-09-12
+    kind: reinforced
+    reason: "D282: признак «тест упоминает имя инструмента» отвергнут замером (25 с одним упоминанием, statusline с 13 зелёными), свидетель установлен исполнением под заглушкой; в своём коде ориентир «копия собралась» дважды писался по имени файла"
+    session: ""
+  - date: 2026-09-12
+    kind: reinforced
+    reason: "очередь D282: кандидаты docs-inventory, docs-duplicates, colon-lead-in-count, knowledge-coverage судили по коду 0 либо по упоминанию; заменены свидетелями исполнения"
+    session: ""
+  - date: 2026-09-13
+    kind: reinforced
+    reason: "реестр родов судит форму кода построчно: import sys; p=sys.argv[1] в одну строку не даёт присваивания — три ложных носителя рода H сняты правкой формы (13 сентября 2026)"
+    session: ""
+  - date: 2026-09-13
+    kind: reinforced
+    reason: "needs_serial читает ТЕКСТ теста: свидетель замера доли последовательных, цитировавший git commit и hooks/state в фикстурах, сам ушёл в последовательную фазу (68 вместо 67); формы собраны из байтов"
+    session: ""
+  - date: 2026-09-13
+    kind: reinforced
+    reason: "знание применялось в волне 13 сентября 2026 и подтвердилось делом (см. кейсы дня и SESSION.md)"
+    session: ""
+  - date: 2026-09-13
+    kind: reinforced
+    reason: "Признак судил ВИД строки: три обхода обычной вёрсткой (перенос хвоста, вложенный буллет, NBSP) плюс ловля внутри собственного отрицания"
+    trigger_case: case-2026-09-13-form-proxy-bypassed-by-ordinary-wrapping.md
+    session: ""
+  - date: 2026-09-13
+    kind: reinforced
+    reason: "третий ложный класс одного прибора за день: имя в начале строки — и команда оболочки, и присваивание (stats=$(…), note = os.environ[…]); 29 рёбер из 794, все ложные"
+    session: ""
+  - date: 2026-09-13
+    kind: reinforced
+    reason: "цикл ожидания искал процесс по строке, которая стоит в его собственных аргументах: два процесса висели по 1ч45м+"
+    session: ""
+  - date: 2026-09-14
+    kind: reinforced
+    reason: "док о дрейфе адресов процитировал адрес живой формой, и страж непустоты прочитал цитату как указание"
+    session: ""
+  - date: 2026-09-14
+    kind: reinforced
+    reason: "ребро «зависит от» несло четыре роли; после разведения спайка исполнения 45 → 0"
+    session: ""
+  - date: 2026-10-24
+    kind: reinforced
+    reason: "сверщик исхода итога: роль (исход) угадывалась формой прозы, три круга скептика; снято договором явной пометки (D1046)"
+    trigger_case: case-2026-10-24-prose-outcome-guessing-replaced-by-explicit-marker.md
+    session: ""
+  - date: 2026-10-28
+    kind: reinforced
+    reason: "подключение библиотеки распознавалось по упоминанию: докстроки и реестр-TSV дали ложную лавину (D1166)"
+    trigger_case: case-2026-10-28-dependency-by-mention-not-by-wiring.md
+    session: ""
+  - date: 2026-11-02
+    kind: reinforced
+    reason: "D1193: образец пробы собран из буквальной формы названия пункта (|| echo), а дефект шире — запасной printf, ключи до c, | в шаблоне; поймал скептик"
+    session: ""
+  - date: 2026-11-06
+    kind: reinforced
+    reason: "blalb R13: «{» по форме знак, по роли — набранная буква «Х»; срезание края решало по форме"
+    trigger_case: case-2026-11-06-normalization-ignores-input-role-of-char.md
+    session: ""
+  - date: 2026-11-23
+    kind: reinforced
+    reason: "мод stukach опознавал фоновый запуск по подстрокам строки, копия запроса api-request-blob дала «498 720 ч»"
+    trigger_case: case-2026-11-23-mod-took-request-copy-for-background-launch
+    session: ""
+fragile: false
+blocker: false
+detection_signals:
+  where: "содержимое правки файла-хука (tool_input) на PreToolUse[Edit|Write]"
+  form: "all_of: [ {\"tool_matches\": [\"Edit\",\"Write\"]}, {\"file_path_regex\": \"(^|/)hooks/[^/]*\\\\.sh$\"}, {\"tool_input_regex\": \"(grep[^\\\\n]*<<<[[:space:]]*\\\"?\\\\$(CMD|COMMAND|TOOL_INPUT)|\\\\[\\\\[[^\\\\n]*\\\\$(CMD|COMMAND|TOOL_INPUT)\\\"?[^\\\\n]*=~|case[[:space:]]+\\\"\\\\$(CMD|COMMAND)\\\"[[:space:]]+in)\"}, {\"none_of\": [ {\"tool_input_contains\": \"executable_part\"}, {\"tool_input_contains\": \"command-scope-lib\"}, {\"tool_input_contains\": \"ds_shell_only\"} ]} ] — сопоставление ведётся с СЫРОЙ строкой команды, минуя единственный в дереве матчер вида оболочки"
+  consequence: "Страж засчитает упоминание за исполнение: путь в аргументе, лексема в кавычках, строка в теле heredoc дадут отказ на чтении — и такой отказ начнут обходить не думая (три ложных отказа rules-write-bypass за одну сессию, 1 сентября)."
+  counterexample: "Не должен ловить сопоставление с уже суженным значением: `printf '%s' \"$EXEC\" | grep -qE '…git[[:space:]]+push…'` в hooks/ci-check-reminder.sh:35 — там $EXEC получен из executable_part, роль уже выбрана. Так же вне признака сопоставление с собственным построенным значением хука ($FILE, $STAGED, $SID)."
+  status: "ИЗМЕРЕНО 2026-09-06: 4 срабатывания на 7620 действий над файлами (0,052%), настоящих 3, ложное 1 (точность 75%). Настоящие: skill-name-ascii-guard.sh:94-96 (ищет mkdir|mv|cp в сырой строке — упоминание сойдёт за исполнение), backlog-vanish-check.sh:32 (case по *git commit*), rules-write-bypass.sh:43,48,88 — последний знание само называет поводом. ЛОЖНОЕ: doc-impact-check.sh:121 — там ищется метка doc-state: в ТЕКСТЕ сообщения коммита, и роль подстроки именно текстовая, сырое сопоставление законно. В уровень 4 не переводится: одно ложное из четырёх есть один ложный ОТКАЗ из четырёх. Условие снятия — исключение случаев, где искомое суть метка сообщения, а не имя команды."
+instrument_verdict: inexpressible   # роль подстроки (употребление или упоминание) задают позиция и обрамление — это разбор смысла; проба R3 считает формы в дереве, в момент правки признака нет
+instrument_assessed: 2026-11-10
+---
+
+## Правило
+
+Признак, опознающий подстроку, обязан быть привязан к РОЛИ этой подстроки, а не к её виду.
+Вид у употребления и у упоминания одинаков по построению, поэтому голое вхождение всегда
+засчитывает данные за операцию.
+
+Роль задаётся позицией и обрамлением, и выбирается по тому, что признак УТВЕРЖДАЕТ:
+
+| Утверждение признака | Вид текста, на котором его проверяют |
+|---|---|
+| «этот вызов сломается здесь» | оболочка без тел heredoc и без содержимого кавычек |
+| «что будет записано в файл» | тело heredoc |
+| «о чём вообще идёт речь» | весь ввод |
+| «это строка контракта документа» | начало строки после отступа |
+| «это речь собеседника» | реплика без цитат, кодовых блоков и вставленного документа |
+
+Один текст команды несёт все виды сразу, и взявший чужой вид признак не просто шумит:
+ложный отказ начинают обходить не думая, а это дороже пропуска.
+
+**Why (проявления, 1 сентября 2026, поверх трёх родительских кейсов):**
+- `hooks/rules-write-bypass.sh` — путь к правилам внутри исходника питона и `>=` внутри
+  `awk` в другом месте той же команды дали ТРИ ложных отказа на чтении за одну сессию.
+- `scripts/backlog-archive.sh:144` и `hooks/completion-gate.sh:142` — литерал `**Проверка.**`
+  в обратных кавычках внутри абзаца, ОПИСЫВАВШЕГО механизм, принят за строку контракта;
+  следующая пара кавычек ушла в `bash -c` и шла туда на каждом Stop.
+- `hooks/five-whys-gate.sh` — дословная цитата доктрины даёт `why=4, heads=4, roots=22` и
+  засчитывалась как произнесённая цепочка разбора.
+- `hooks/five-whys-gate.sh:255` — корень `оказал` совпадал внутри «показал», самого частого
+  оборота отчётности проекта, и давал отказ на записи.
+
+**How to apply:**
+1. Заводя признак, назови вслух, ЧТО он утверждает, и выбери вид текста из таблицы выше.
+   Не «ищем подстроку в команде», а «ищем в исполняемой части, потому что утверждаем про
+   исполнение».
+2. Дешёвая механическая проверка при заведении: напиши рядом фразу или абзац, ОБЪЯСНЯЮЩИЙ
+   этот признак, и скорми их признаку. Сработал — якоря нет, есть совпадение.
+3. Особая бдительность там, где механизм и его описание живут в одном дереве. Пункт долга,
+   рассказывающий о контракте, неизбежно цитирует контракт; знание о признаке цитирует
+   признак. Саморефлексивный текст — не редкий случай, а норма этого проекта.
+4. Граница слова ставится POSIX-классом `(^|[[:space:]])`, а не диапазоном кириллицы в
+   скобках: диапазон GNU grep отвергает в локали `C.UTF-8`, где идёт CI.
+
+**Limitations:** правило не отвечает на вопрос, ПОЛНА ли роль — перечень позиций может быть
+полным, а признак всё равно снят с вида (это `pattern-subject-checked-by-enumeration`).
+И не отвечает на вопрос авторства: если различаемое свойство принадлежит ИСТОЧНИКУ, а не
+содержимому, роли в тексте нет вовсе, и признак не строится ни один
+(`case-2026-08-28-authorship-is-not-in-the-content`).
+
+**Условие подъёма в принцип:** сработает в домене без оболочки и без разметки — например на
+структурированных данных или на голосовом вводе, — тогда это про предикаты вообще.

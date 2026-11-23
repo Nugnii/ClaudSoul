@@ -1,0 +1,8 @@
+{
+  "version": 1,
+  "repo_vars": ["REPO", "ROOT", "ROOT_DIR", "CLAUDSOUL_ROOT", "CLAUDSOUL_REPO", "CLAUDSOUL_DIR",
+                "_root", "_proj", "_BA_ROOT", "PROJECT"],
+  "contracts": ["BACKLOG.md", "BACKLOG-archive.md", "ROOTS.md", "CHANGELOG.md", "VERSION", "CLAUDE.md", "README.md",
+                "knowledge/META.md", "**/*.tsv", "**/*.json", "**/*.yml", "**/*.yaml", "**/*.toml", "**/*.txt",
+                "**/*.plist"]
+}

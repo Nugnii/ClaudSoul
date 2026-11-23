@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.claudsoul.measurements</string>
+
+    <!-- Исполнитель срока замеров (D1005): прогоняет только просроченные строки
+         scripts/measurements.tsv. Вне границы хода — хука-родителя нет, кольца D321 нет. -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/bin/bash</string>
+        <string>__CLAUDSOUL_DIR__/scripts/measurement-due.sh</string>
+        <string>run</string>
+    </array>
+
+    <!-- launchd не даёт PATH оболочки: без /usr/local/bin нет docker (suite-linux). -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+    </dict>
+
+    <!-- Daily 03:45 local; a missed run (machine asleep) fires on wake. -->
+    <key>StartCalendarInterval</key>
+    <dict>
+        <key>Hour</key>
+        <integer>3</integer>
+        <key>Minute</key>
+        <integer>45</integer>
+    </dict>
+
+    <!-- Не на загрузке: загрузка = каждый вход в систему, а прогон бывает в десятки минут. -->
+    <key>RunAtLoad</key>
+    <false/>
+
+    <key>ProcessType</key>
+    <string>Background</string>
+    <key>Nice</key>
+    <integer>10</integer>
+    <key>LowPriorityIO</key>
+    <true/>
+
+    <key>StandardOutPath</key>
+    <string>__HOME__/.claude/hooks/state/measurements-stdout.log</string>
+    <key>StandardErrorPath</key>
+    <string>__HOME__/.claude/hooks/state/measurements-stderr.log</string>
+
+    <key>KeepAlive</key>
+    <false/>
+</dict>
+</plist>

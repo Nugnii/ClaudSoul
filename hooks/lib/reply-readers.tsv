@@ -1,0 +1,47 @@
+# reply-readers.tsv — какое понятие «реплики владельца» нужно каждому читателю признака (D1145, D1149; корень R3, R5).
+# Под одним признаком несколько понятий, и правка признака, решённая по виду записи, достаётся читателям чужого понятия
+# (D1142 ×2, D1143, D1144 — четыре первые редакции подряд). Правишь признак — сверься с понятием каждой строки.
+# Понятие и его сигнатура на различающих случаях (реплика посреди хода Q, сводка сжатия S1, уведомление задачи S2):
+#   граница-узкая      0 0 0  запись user владельца (`is_owner_reply`, в jq `owner_reply`): ход делит только реплика
+#   граница-широкая    0 1 1  запись user (`is_turn_user`, в jq `turn_user`, D1153): ход делят и сводка, и уведомление;
+#                             служебная `api-request-blob` и вложение `queued_command` — нет
+#   граница-без-сводки 0 0 1  запись user, кроме сводки сжатия: уведомление ход делит, сжатие посреди хода — нет
+#   речь               1 0 0  последняя речь владельца: реплика хода либо реплика посреди хода (`is_owner_speech`, `as_reply`)
+#   до-текущей         1 0 0  речь ДО текущей подачи (детектор интрузивности, D1144): реплику, совпавшую с подачей, не берёт
+#   источник                  файл определяет признак; понятия — у его читателей
+#   не-реплика                работает с записями `user` не как с репликой (читает результаты инструментов, пишет фикстуры)
+# Читатель — файл хуков или инструментов (не тест), зовущий признак или окно хода по имени либо держащий вид записи
+# "user" своей копией. Понятие здесь — объявленная нужда, и с поведением читателя его сверяет свидетель
+# `hooks/tests/test_reply_readers_behavior.sh` (драйвер у каждой строки, проба probe_D1149); покрытие и словарь —
+# `hooks/tests/test_reply_readers_registry.sh` (проба probe_D1145). Слова словаря читают они и `probe_D1153.sh`:
+# новое слово — во все три.
+hooks/hook-input-lib.sh	источник
+hooks/lib/transcript_window.py	источник
+hooks/root-cause-lib.sh	граница-широкая
+hooks/five-whys-gate.sh	граница-широкая
+hooks/declared-problem-recorded.sh	граница-широкая
+hooks/session-collector.sh	граница-широкая
+hooks/output-language-check.sh	граница-широкая
+hooks/relative-date-check.sh	граница-широкая
+hooks/fix-level-check.sh	граница-широкая
+hooks/accepted-alternative-gap.sh	граница-широкая
+hooks/timestamp-canary-check.sh	граница-без-сводки
+hooks/publish-guard.sh	граница-широкая
+scripts/five-whys-attribution-replay.py	граница-широкая
+scripts/signal-precision-corpus.py	граница-широкая
+scripts/self-repeat-replay.py	граница-широкая
+scripts/stopper-effect.sh	граница-узкая
+hooks/user-correction-guard.sh	речь
+hooks/bulk-copy-guard.sh	речь
+hooks/trust-guard.sh	речь
+hooks/internal-doc-leak-guard.sh	речь
+hooks/shared-language-lib.sh	речь
+hooks/activity-flush-lib.sh	речь
+hooks/lib/backfill-replay-one.sh	речь
+scripts/colon-lead-in-count.py	речь
+scripts/authorization-replay.py	речь
+scripts/question-survival.py	речь
+hooks/itr-event-detector.sh	до-текущей
+scripts/deny-target-precision.py	не-реплика
+scripts/ab-authorization-replay.sh	не-реплика
+hooks/lib/rework_red_run.py	не-реплика

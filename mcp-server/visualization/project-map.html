@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<meta charset="utf-8">
+<title>ClaudSoul — карта связей проекта</title>
+<style>
+  body { margin:0; background:#0d1117; color:#c9d1d9; font:13px/1.5 -apple-system,system-ui,sans-serif; }
+  #side { position:fixed; left:0; top:0; width:310px; height:100%; overflow:auto;
+          background:#161b22; border-right:1px solid #30363d; padding:12px 14px; box-sizing:border-box; }
+  #side h1 { font-size:15px; margin:0 0 4px; color:#e6edf3; }
+  #side .sub { color:#8b949e; font-size:11px; margin-bottom:12px; }
+  .kind { display:flex; align-items:center; gap:7px; padding:2px 0; cursor:pointer; user-select:none; }
+  .kind .sw { width:11px; height:11px; border-radius:3px; }
+  .kind.off { opacity:.32; }
+  .kind .n { margin-left:auto; color:#8b949e; font-size:11px; }
+  #q { width:100%; box-sizing:border-box; margin:8px 0; padding:6px 8px; background:#0d1117;
+       border:1px solid #30363d; border-radius:6px; color:#c9d1d9; }
+  #info { margin-top:12px; border-top:1px solid #30363d; padding-top:10px; font-size:12px; }
+  #info .t { color:#e6edf3; font-weight:600; word-break:break-all; }
+  #info .row { margin:3px 0; color:#8b949e; }
+  #info b { color:#c9d1d9; font-weight:500; }
+  #info ul { margin:4px 0 8px; padding-left:16px; }
+  #info li { margin:1px 0; word-break:break-all; }
+  svg { position:fixed; left:310px; top:0; }
+  .lnk { stroke:#30363d; stroke-opacity:.55; }
+  .lnk.hot { stroke:#f0883e; stroke-opacity:.95; stroke-width:2; }
+  .nd { cursor:pointer; stroke:#0d1117; stroke-width:1.2; }
+  .nd.dim { opacity:.12; }
+  .lbl { fill:#8b949e; font-size:9px; pointer-events:none; }
+</style>
+<div id="side">
+  <h1>Карта связей проекта</h1>
+  <div class="sub" id="stat">…</div>
+  <input id="q" placeholder="поиск: имя файла, функции, пункта">
+  <div id="kinds"></div>
+  <div id="info">Кликни узел — покажу полный путь: что на нём стоит и на чём стоит он.</div>
+</div>
+<svg></svg>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script>
+const COLOR = {
+  guard:'#f85149', hook:'#db6d28', script:'#d29922', library:'#8957e5', test:'#3fb950',
+  doc:'#58a6ff', registry:'#e3b341', journal:'#39c5cf', function:'#a371f7',
+  case:'#7ee787', pattern:'#56d364', principle:'#2ea043', backlog:'#ff7b72',
+  measurement:'#79c0ff', genus:'#ffa657', root:'#ff9bce', mechanism:'#8b949e'
+};
+const NAMES = {
+  guard:'стражи', hook:'хуки', script:'скрипты', library:'библиотеки', test:'тесты',
+  doc:'документы', registry:'реестры', journal:'журналы', function:'функции',
+  case:'кейсы', pattern:'паттерны', principle:'принципы', backlog:'пункты долга',
+  measurement:'замеры', genus:'роды дефекта', root:'корни', mechanism:'прочее'
+};
+const W = innerWidth - 310, H = innerHeight;
+const svg = d3.select('svg').attr('width', W).attr('height', H);
+const g = svg.append('g');
+svg.call(d3.zoom().scaleExtent([.15, 6]).on('zoom', e => g.attr('transform', e.transform)));
+
+fetch('project-graph-data.json').then(r => r.json()).then(data => {
+  const nodes = data.nodes, edges = data.edges.map(e => ({...e}));
+  const deg = {}; edges.forEach(e => { deg[e.source] = (deg[e.source]||0)+1; deg[e.target] = (deg[e.target]||0)+1; });
+  nodes.forEach(n => n.deg = deg[n.id] || 0);
+  document.getElementById('stat').textContent = `${nodes.length} сущностей · ${edges.length} связей`;
+
+  const counts = {};
+  nodes.forEach(n => counts[n.type] = (counts[n.type]||0)+1);
+  const off = new Set();
+  const kinds = d3.select('#kinds');
+  Object.entries(counts).sort((a,b) => b[1]-a[1]).forEach(([k, c]) => {
+    const row = kinds.append('div').attr('class','kind').on('click', function() {
+      off.has(k) ? off.delete(k) : off.add(k);
+      d3.select(this).classed('off', off.has(k)); redraw();
+    });
+    row.append('div').attr('class','sw').style('background', COLOR[k] || '#8b949e');
+    row.append('div').text(NAMES[k] || k);
+    row.append('div').attr('class','n').text(c);
+  });
+
+  const sim = d3.forceSimulation(nodes)
+    .force('link', d3.forceLink(edges).id(d => d.id).distance(60).strength(.12))
+    .force('charge', d3.forceManyBody().strength(-45))
+    .force('center', d3.forceCenter(W/2, H/2).strength(.02))
+    .force('collide', d3.forceCollide().radius(d => 4 + Math.min(9, Math.sqrt(d.deg))));
+
+  const link = g.append('g').selectAll('line').data(edges).join('line').attr('class','lnk');
+  const node = g.append('g').selectAll('circle').data(nodes).join('circle')
+    .attr('class','nd').attr('r', d => 3 + Math.min(9, Math.sqrt(d.deg)))
+    .attr('fill', d => COLOR[d.type] || '#8b949e')
+    .on('click', (e, d) => show(d))
+    .call(d3.drag()
+      .on('start', (e,d) => { if (!e.active) sim.alphaTarget(.2).restart(); d.fx=d.x; d.fy=d.y; })
+      .on('drag',  (e,d) => { d.fx=e.x; d.fy=e.y; })
+      .on('end',   (e,d) => { if (!e.active) sim.alphaTarget(0); d.fx=null; d.fy=null; }));
+  node.append('title').text(d => `${NAMES[d.type]||d.type}: ${d.key}` +
+    (d.last_change ? `\nпоследняя правка ${d.last_change}, за 30 дней ${d.edits30}` : ''));
+
+  sim.on('tick', () => {
+    link.attr('x1', d=>d.source.x).attr('y1', d=>d.source.y).attr('x2', d=>d.target.x).attr('y2', d=>d.target.y);
+    node.attr('cx', d=>d.x).attr('cy', d=>d.y);
+  });
+
+  function redraw() {
+    node.classed('dim', d => off.has(d.type));
+    link.style('display', d => off.has(d.source.type) || off.has(d.target.type) ? 'none' : null);
+  }
+
+  function show(d) {
+    const up = edges.filter(e => e.target.id === d.id);
+    const down = edges.filter(e => e.source.id === d.id);
+    link.classed('hot', e => e.source.id === d.id || e.target.id === d.id);
+    const li = a => a.length ? '<ul>' + a.map(x => `<li>${x}</li>`).join('') + '</ul>' : '<div class="row">—</div>';
+    document.getElementById('info').innerHTML =
+      `<div class="t">${d.key}</div>` +
+      `<div class="row">${NAMES[d.type]||d.type}${d.channel ? ' · канал: <b>'+d.channel+'</b>' : ''}` +
+      `${d.doc_kind ? ' · '+d.doc_kind : ''}${d.legs ? ' · ног: <b>'+d.legs+'</b>' : ''}</div>` +
+      (d.result ? `<div class="row">результат: ${d.result}</div>` : '') +
+      (d.last_change ? `<div class="row">правился: <b>${d.last_change}</b>, за 30 дней <b>${d.edits30}</b> раз</div>` : '<div class="row">за 30 дней не менялся</div>') +
+      `<div class="row"><b>НА НЁМ СТОЯТ (${up.length}):</b></div>` +
+      li(up.slice(0,40).map(e => `${e.source.key} <span style="color:#6e7681">—${e.type}→</span>`)) +
+      `<div class="row"><b>ОН СТОИТ НА (${down.length}):</b></div>` +
+      li(down.slice(0,40).map(e => `<span style="color:#6e7681">—${e.type}→</span> ${e.target.key}`));
+  }
+
+  document.getElementById('q').addEventListener('input', function() {
+    const v = this.value.trim().toLowerCase();
+    node.classed('dim', d => off.has(d.type) || (v && !(d.key+d.name).toLowerCase().includes(v)));
+    if (v) { const hit = nodes.find(n => (n.key+n.name).toLowerCase().includes(v)); if (hit) show(hit); }
+  });
+});
+</script>

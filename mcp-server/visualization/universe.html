@@ -1,0 +1,2110 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ClaudSoul — Knowledge Universe (3D)</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; }
+  body {
+    background: #050510;
+    overflow: hidden;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    color: #c8c8d0;
+  }
+  #universe { width: 100vw; height: 100vh; }
+
+  .panel {
+    position: absolute;
+    background: rgba(16, 16, 28, 0.85);
+    border: 1px solid rgba(120, 120, 180, 0.25);
+    border-radius: 8px;
+    backdrop-filter: blur(8px);
+    z-index: 10;
+  }
+
+  #hud { top: 16px; left: 16px; padding: 10px 14px; font-size: 12px; line-height: 1.5; max-width: 280px; }
+  #hud .t { font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+  #hud .l { opacity: 0.55; }
+  #hud a { color: #a0c8ff; text-decoration: none; }
+  #hud a:hover { text-decoration: underline; }
+
+  #stats {
+    bottom: 16px; left: 16px; padding: 8px 12px; font-size: 11px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  #settings {
+    top: 16px; right: 16px; width: 260px; padding: 12px 14px;
+    font-size: 12px;
+    max-height: calc(100vh - 32px); overflow-y: auto;
+  }
+  #settings .s-title {
+    font-size: 13px; font-weight: 600; margin-bottom: 10px;
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  #settings .s-toggle {
+    cursor: pointer; opacity: 0.5; font-size: 16px;
+    user-select: none; padding: 0 4px;
+  }
+  #settings .s-toggle:hover { opacity: 1; }
+  #settings .s-body.collapsed { display: none; }
+
+  .s-section {
+    margin-bottom: 12px; padding-bottom: 10px;
+    border-bottom: 1px solid rgba(120, 120, 180, 0.12);
+  }
+  .s-section:last-child { border-bottom: none; padding-bottom: 0; margin-bottom: 0; }
+  .s-label { font-size: 11px; opacity: 0.6; margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+  .s-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+  .s-row label { font-size: 12px; flex: 1; }
+  .s-row .s-val {
+    font-size: 11px; opacity: 0.55; font-variant-numeric: tabular-nums;
+    min-width: 32px; text-align: right;
+  }
+  input[type="range"] {
+    width: 100%; margin-top: 2px; accent-color: #80a0ff;
+    height: 4px; background: rgba(120, 120, 180, 0.2); border-radius: 2px;
+  }
+
+  .s-type {
+    display: flex; align-items: center; gap: 8px;
+    padding: 3px 0; cursor: pointer; user-select: none;
+  }
+  .s-type:hover { background: rgba(120, 120, 180, 0.08); border-radius: 4px; }
+  .s-type input { accent-color: #80a0ff; cursor: pointer; }
+  .s-type .swatch {
+    width: 10px; height: 10px; border-radius: 50%;
+    box-shadow: 0 0 6px currentColor;
+  }
+  .s-type .name { flex: 1; font-size: 12px; }
+  .s-type .count { font-size: 10px; opacity: 0.4; font-variant-numeric: tabular-nums; }
+
+  .s-btn {
+    background: rgba(120, 120, 200, 0.15);
+    border: 1px solid rgba(120, 120, 180, 0.3);
+    color: #c8c8d0;
+    padding: 5px 10px; border-radius: 4px;
+    font-size: 11px; cursor: pointer;
+    width: 100%; margin-top: 2px;
+    transition: background 0.15s;
+  }
+  .s-btn:hover { background: rgba(120, 120, 200, 0.3); }
+
+  .s-search-input {
+    width: 100%;
+    background: rgba(120, 120, 200, 0.08);
+    border: 1px solid rgba(120, 120, 180, 0.3);
+    color: #e0e0e8; font-size: 12px;
+    padding: 5px 8px; border-radius: 4px;
+    outline: none; box-sizing: border-box;
+  }
+  .s-search-input:focus { border-color: rgba(160, 160, 220, 0.6); }
+  .s-search-results {
+    margin-top: 4px; max-height: 200px; overflow-y: auto;
+  }
+  .s-search-results .r-row {
+    display: flex; align-items: center; gap: 6px;
+    padding: 4px 6px; border-radius: 4px;
+    cursor: pointer; font-size: 12px;
+    transition: background 0.1s;
+  }
+  .s-search-results .r-row:hover { background: rgba(120, 120, 200, 0.18); }
+  .s-search-results .r-row .r-swatch {
+    width: 8px; height: 8px; border-radius: 50%;
+    box-shadow: 0 0 4px currentColor; flex: 0 0 8px;
+  }
+  .s-search-results .r-row .r-name {
+    flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .s-search-results .r-row .r-meta {
+    font-size: 10px; opacity: 0.55; font-variant-numeric: tabular-nums;
+  }
+  .s-search-empty {
+    font-size: 11px; opacity: 0.45; padding: 4px 6px;
+  }
+
+  /* Info panel — left side */
+  #info {
+    top: 16px; left: 16px; width: 340px; padding: 16px 18px;
+    font-size: 12px; line-height: 1.5;
+    display: none;
+    max-height: calc(100vh - 100px); overflow-y: auto;
+  }
+  #info.visible { display: block; }
+  #info .i-head {
+    display: flex; align-items: flex-start; gap: 10px;
+    margin-bottom: 10px;
+  }
+  #info .i-swatch {
+    width: 16px; height: 16px; border-radius: 50%;
+    margin-top: 4px;
+    box-shadow: 0 0 18px 2px currentColor, 0 0 4px currentColor;
+    flex: 0 0 16px;
+  }
+  #info .i-title-box { flex: 1; }
+  #info .i-title { font-size: 15px; font-weight: 600; line-height: 1.3; }
+  #info .i-type {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+    opacity: 0.55; margin-top: 2px;
+  }
+  #info .i-close {
+    cursor: pointer; opacity: 0.5; font-size: 18px;
+    padding: 0 4px; margin-left: 4px; line-height: 1;
+  }
+  #info .i-close:hover { opacity: 1; }
+
+  #info .i-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 1px; background: rgba(120, 120, 180, 0.2);
+    border: 1px solid rgba(120, 120, 180, 0.2);
+    border-radius: 6px; overflow: hidden; margin-bottom: 10px;
+  }
+  #info .i-cell {
+    background: rgba(16, 16, 28, 0.95);
+    display: flex; flex-direction: column; align-items: center;
+    padding: 6px 4px;
+  }
+  #info .i-cell-label { font-size: 10px; opacity: 0.45; }
+  #info .i-cell-val { font-size: 14px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+  #info .i-summary {
+    font-size: 12px; line-height: 1.5; opacity: 0.7;
+    margin: 10px 0; padding: 8px 10px;
+    border-left: 2px solid rgba(120, 120, 180, 0.3);
+    font-style: italic;
+  }
+  #info .i-field { margin-bottom: 8px; }
+  #info .i-field .fk {
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px;
+    opacity: 0.45; margin-bottom: 2px;
+  }
+  #info .i-field .fv { font-size: 12px; word-break: break-word; }
+  #info .i-field .fv .tag {
+    display: inline-block;
+    background: rgba(120, 120, 180, 0.14);
+    border-radius: 3px;
+    padding: 1px 6px; margin: 2px 3px 2px 0;
+    font-size: 11px;
+  }
+
+  #info .i-edges { margin-top: 12px; }
+  #info .i-edge {
+    padding: 5px 8px; border-radius: 4px;
+    cursor: pointer; transition: background 0.12s;
+    margin-top: 2px;
+  }
+  #info .i-edge:hover { background: rgba(120, 120, 200, 0.18); }
+  #info .i-edge .e-name { color: rgba(180, 190, 240, 0.95); font-size: 12px; }
+  #info .i-edge .e-meta {
+    font-size: 10px; opacity: 0.55; margin-top: 1px;
+    display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px;
+  }
+  #info .i-edge .e-type {
+    background: rgba(120, 120, 180, 0.2);
+    color: rgba(210, 215, 240, 0.95);
+    padding: 1px 6px; border-radius: 3px;
+    line-height: 1.5; white-space: nowrap;
+  }
+
+  #err {
+    position: absolute; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: #ff8888; font-size: 14px;
+    background: rgba(40, 10, 10, 0.9);
+    padding: 16px 24px; border-radius: 8px;
+    display: none; z-index: 20;
+  }
+
+  #ctxmenu {
+    position: fixed; z-index: 40;
+    background: rgba(16, 16, 28, 0.97);
+    border: 1px solid rgba(120, 120, 180, 0.4);
+    border-radius: 6px;
+    padding: 4px 0;
+    min-width: 180px;
+    box-shadow: 0 6px 24px rgba(0,0,0,0.55);
+    color: #e8e8f0; font-size: 12px;
+    display: none;
+    user-select: none;
+  }
+  #ctxmenu .cm-title {
+    padding: 6px 12px 8px; font-size: 11px;
+    border-bottom: 1px solid rgba(120, 120, 180, 0.18);
+    color: rgba(200, 205, 240, 0.75);
+    max-width: 220px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap;
+  }
+  #ctxmenu .cm-item {
+    padding: 7px 14px; cursor: pointer;
+    transition: background 0.1s;
+  }
+  #ctxmenu .cm-item:hover { background: rgba(120, 120, 200, 0.22); }
+  #ctxmenu .cm-item.danger { color: #f87171; }
+  #ctxmenu .cm-item.danger:hover { background: rgba(248, 113, 113, 0.18); }
+  #ctxmenu .cm-item.warn { color: #fbbf24; }
+  #ctxmenu .cm-item.warn:hover { background: rgba(251, 191, 36, 0.16); }
+</style>
+</head>
+<body>
+<div id="universe"></div>
+
+<div id="ctxmenu">
+  <div class="cm-title" id="cm-title"></div>
+  <div class="cm-item" data-op="open">Открыть файл в Finder</div>
+  <div class="cm-item warn" data-op="archive">Переместить в архив</div>
+  <div class="cm-item danger" data-op="delete">Удалить навсегда…</div>
+</div>
+
+<div id="hud" class="panel">
+  <div class="t">Knowledge Universe</div>
+  <div class="l">v1.2.0-rc</div>
+  <div style="margin-top:8px">
+    <span class="l">drag:</span> orbit ·
+    <span class="l">scroll:</span> zoom ·
+    <span class="l">click:</span> info
+  </div>
+  <div style="margin-top:8px"><a href="/index.html">← back to 2D</a></div>
+</div>
+
+<div id="stats" class="panel"></div>
+
+<div id="info" class="panel"></div>
+
+<div id="settings" class="panel">
+  <div class="s-title">
+    Настройки
+    <span class="s-toggle" id="settings-toggle">_</span>
+  </div>
+  <div class="s-body" id="settings-body">
+    <div class="s-section">
+      <div class="s-label">Поиск</div>
+      <input type="text" id="search-input" class="s-search-input" placeholder="имя узла…" autocomplete="off">
+      <div id="search-results" class="s-search-results"></div>
+    </div>
+
+    <div class="s-section">
+      <div class="s-label">Узлы</div>
+      <div class="s-row">
+        <label>Размер <span class="s-val" id="v-size">50</span></label>
+      </div>
+      <input type="range" id="r-size" min="10" max="200" value="50">
+      <div class="s-row" style="margin-top:6px">
+        <label>Детализация <span class="s-val" id="v-res">24</span></label>
+      </div>
+      <input type="range" id="r-res" min="6" max="48" value="36" step="2">
+      <div class="s-row" style="margin-top:6px">
+        <label>Свечение <span class="s-val" id="v-glow">80</span></label>
+      </div>
+      <input type="range" id="r-glow" min="0" max="200" value="80">
+    </div>
+
+    <div class="s-section">
+      <div class="s-label">Силы</div>
+      <div class="s-row">
+        <label>Отталкивание <span class="s-val" id="v-charge">50</span></label>
+      </div>
+      <input type="range" id="r-charge" min="5" max="200" value="50">
+      <div class="s-row" style="margin-top:6px">
+        <label>Длина рёбер <span class="s-val" id="v-dist">30</span></label>
+      </div>
+      <input type="range" id="r-dist" min="5" max="200" value="30">
+      <div class="s-row" style="margin-top:6px">
+        <label>Гравитация доменов <span class="s-val" id="v-gravity">40</span></label>
+      </div>
+      <input type="range" id="r-gravity" min="0" max="100" value="40">
+      <div style="font-size:10px;opacity:0.45;margin-top:4px;line-height:1.4">
+        Узлы одного домена притягиваются к общему центру масс. 0 — нет группировки, 100 — жёсткие галактики.
+      </div>
+    </div>
+
+    <div class="s-section">
+      <div class="s-label">Рёбра</div>
+      <div class="s-row">
+        <label>Яркость <span class="s-val" id="v-linko">60</span></label>
+      </div>
+      <input type="range" id="r-linko" min="0" max="100" value="60">
+      <div class="s-row" style="margin-top:6px">
+        <label>Толщина <span class="s-val" id="v-edgethick">50</span></label>
+      </div>
+      <input type="range" id="r-edgethick" min="0" max="200" value="50">
+      <div class="s-row" style="margin-top:6px">
+        <label>Чувст. к силе <span class="s-val" id="v-strsens">70</span></label>
+      </div>
+      <input type="range" id="r-strsens" min="0" max="100" value="70">
+      <div style="font-size:10px;opacity:0.45;margin-top:4px;line-height:1.4">
+        Крепкие связи короче, ярче, толще, жёстче. Слабые — длиннее, тусклее, тоньше, подвижнее.
+      </div>
+    </div>
+
+    <div class="s-section">
+      <div class="s-label">Фильтр по типу</div>
+      <div id="type-filter"></div>
+    </div>
+
+    <div class="s-section">
+      <div class="s-label">Фильтр по уверенности</div>
+      <div class="s-row">
+        <label>Мин. <span class="s-val" id="v-minconf">1</span></label>
+      </div>
+      <input type="range" id="r-minconf" min="1" max="5" value="1" step="1">
+      <div style="font-size:10px;opacity:0.45;margin-top:4px;line-height:1.4">
+        Скрыть узлы с confidence &lt; min. Без confidence — считается как 1.
+      </div>
+    </div>
+
+    <div class="s-section">
+      <div class="s-label">Туманности</div>
+      <label class="s-type">
+        <input type="checkbox" id="cb-nebula" checked>
+        <span class="name">Показывать туманности доменов</span>
+      </label>
+      <div style="font-size:10px;opacity:0.45;margin-top:4px;line-height:1.4">
+        Каждый домен — своё гауссовское облако вокруг центра масс узлов.
+      </div>
+    </div>
+
+    <div class="s-section">
+      <div class="s-label">Фон</div>
+      <div class="s-row">
+        <label>Космический ветер <span class="s-val" id="v-wind">40</span></label>
+      </div>
+      <input type="range" id="r-wind" min="0" max="100" value="40">
+      <div style="font-size:10px;opacity:0.45;margin-top:4px;line-height:1.4">
+        Медленно дрейфующие частицы. 0 — статичный фон.
+      </div>
+    </div>
+
+    <div class="s-section">
+      <button class="s-btn" id="btn-zoom-fit">Сбросить камеру</button>
+    </div>
+  </div>
+</div>
+
+<div id="err"></div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://esm.sh/three@0.180.0",
+    "three/": "https://esm.sh/three@0.180.0/"
+  }
+}
+</script>
+
+<script type="module">
+let THREE, ForceGraph3D, Line2, LineGeometry, LineMaterial;
+try {
+  THREE = await import('three');
+  const fg = await import('https://esm.sh/3d-force-graph@1.73.4?external=three');
+  ForceGraph3D = fg.default || fg.ForceGraph3D || fg;
+  ({ Line2 } = await import('three/examples/jsm/lines/Line2.js'));
+  ({ LineGeometry } = await import('three/examples/jsm/lines/LineGeometry.js'));
+  ({ LineMaterial } = await import('three/examples/jsm/lines/LineMaterial.js'));
+} catch (e) {
+  const el = document.getElementById('err');
+  el.textContent = 'Не удалось загрузить three.js / 3d-force-graph / Line2: ' + e.message;
+  el.style.display = 'block';
+  throw e;
+}
+
+if (typeof ForceGraph3D !== 'function') {
+  const el = document.getElementById('err');
+  el.textContent = 'ForceGraph3D не является функцией (экспорт сменился).';
+  el.style.display = 'block';
+  throw new Error('ForceGraph3D export shape changed');
+}
+
+const errBox = document.getElementById('err');
+const showErr = (msg) => { errBox.textContent = msg; errBox.style.display = 'block'; };
+
+const typeColor = {
+  principle: '#ffd166',
+  pattern:   '#80c8ff',
+  case:      '#b0a0ff',
+  entity:    '#88e0c0',
+  fact:      '#e090b0',
+  relation:  '#a0a0a0',
+  unknown:   '#909098',
+  default:   '#909098'
+};
+
+const edgeTypeRu = {
+  related: 'связано', caused_by: 'вызвано', similar_to: 'похоже',
+  contradicts: 'противоречит', led_to: 'привело к', specializes: 'уточняет',
+  generalizes: 'обобщает', source_case: 'источник', confirms: 'подтверждает'
+};
+
+function escapeHtml(s) {
+  if (s == null) return '';
+  return String(s)
+    .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+// =============================================================
+// PALETTE — triadic by type, lightness modulated by mass.
+// Matches 2D graph so both views share visual vocabulary.
+// =============================================================
+const typeHSL = {
+  principle: { h: 42,  s: 82, lMin: 58, lMax: 78 },   // amber / gold
+  pattern:   { h: 190, s: 68, lMin: 50, lMax: 70 },   // teal / cyan
+  case:      { h: 260, s: 55, lMin: 55, lMax: 74 },   // lavender / violet
+  entity:    { h: 158, s: 55, lMin: 55, lMax: 72 },   // mint
+  fact:      { h: 328, s: 55, lMin: 60, lMax: 76 },   // pink
+  relation:  { h: 210, s: 10, lMin: 55, lMax: 70 },   // neutral
+  unknown:   { h: 220, s: 10, lMin: 50, lMax: 65 }
+};
+function nodeBaseColor(n) {
+  const p = typeHSL[n.type] || typeHSL.unknown;
+  const m = Math.min(1, (n.mass || 1) / Math.max(maxMass, 1));
+  const l = p.lMin + m * (p.lMax - p.lMin);
+  return new THREE.Color(`hsl(${p.h}, ${p.s}%, ${l.toFixed(1)}%)`);
+}
+
+// Domain accent — secondary palette (greens, corals, magentas, limes etc.)
+// Chosen to not collide with type hues.
+const DOMAIN_ACCENT_PALETTE = [
+  '#4ade80', '#f87171', '#ec4899', '#84cc16', '#f43f5e',
+  '#d946ef', '#a3e635', '#fb923c', '#e11d48', '#65a30d'
+];
+function fnvHash(s) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+function domainAccent(n) {
+  const d = (n.domain || '').split(',')[0].trim();
+  if (!d) return null;
+  return DOMAIN_ACCENT_PALETTE[fnvHash(d) % DOMAIN_ACCENT_PALETTE.length];
+}
+
+// Status → glow multiplier (brightness only, no hue change).
+const stateGlowMult = {
+  active: 1.0, branched: 0.75, weakened: 0.45, deprecated: 0.15
+};
+function nodeStateMult(n) {
+  return stateGlowMult[n.status] ?? 1.0;
+}
+
+// =============================================================
+// DATA LOAD
+// =============================================================
+let allNodes, allLinks;
+try {
+  const resp = await fetch('/graph-data.json', { cache: 'no-store' });
+  if (!resp.ok) throw new Error(`fetch failed: ${resp.status}`);
+  const data = await resp.json();
+  allNodes = (data.nodes || []).map(n => ({ ...n }));
+  allLinks = (data.edges || data.links || []).map(e => ({
+    source: e.source, target: e.target,
+    type: e.type || e.edge_type || 'relation',
+    strength: e.strength != null ? e.strength : 1
+  }));
+} catch (e) {
+  showErr(`Не удалось загрузить граф: ${e.message}`);
+  throw e;
+}
+
+document.getElementById('stats').textContent =
+  `${allNodes.length} узлов · ${allLinks.length} рёбер`;
+
+const maxMass = Math.max(1, ...allNodes.map(n => n.mass || 1));
+const nodeById = new Map(allNodes.map(n => [n.id, n]));
+
+const cfg = {
+  size: 50, res: 36, glow: 80,
+  charge: 50, dist: 30,
+  linkOpacity: 60, strSens: 70,
+  gravity: 40,          // domain clustering force strength (0..100)
+  edgeThick: 50,        // edge thickness multiplier (0..200)
+  wind: 40,             // cosmic-wind particle strength (0..100)
+  minConfidence: 1,
+  visibleTypes: new Set()
+};
+
+let selectedId = null;
+let hoveredId = null;
+
+const typeCounts = {};
+for (const n of allNodes) {
+  typeCounts[n.type] = (typeCounts[n.type] || 0) + 1;
+  cfg.visibleTypes.add(n.type);
+}
+
+// === PERSIST SETTINGS (localStorage) ===
+const SETTINGS_KEY = 'claudsoul.universe.settings.v1';
+const SETTINGS_SLIDERS = {
+  'r-size': 'size', 'r-res': 'res', 'r-glow': 'glow',
+  'r-charge': 'charge', 'r-dist': 'dist', 'r-gravity': 'gravity',
+  'r-linko': 'linkOpacity', 'r-edgethick': 'edgeThick',
+  'r-strsens': 'strSens', 'r-wind': 'wind',
+  'r-minconf': 'minConfidence'
+};
+function loadSettings() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) || 'null'); } catch (_) {}
+  if (!saved) return;
+  for (const [id, key] of Object.entries(SETTINGS_SLIDERS)) {
+    const v = saved[key];
+    if (v == null) continue;
+    const slider = document.getElementById(id);
+    if (!slider) continue;
+    slider.value = v;
+    cfg[key] = +v;
+    const valEl = document.getElementById('v-' + id.slice(2));
+    if (valEl) valEl.textContent = v;
+  }
+  if (typeof saved.nebula === 'boolean') {
+    const cb = document.getElementById('cb-nebula');
+    if (cb) cb.checked = saved.nebula;
+  }
+  if (Array.isArray(saved.hiddenTypes)) {
+    for (const t of saved.hiddenTypes) cfg.visibleTypes.delete(t);
+  }
+}
+function saveSettings() {
+  const out = {};
+  for (const key of Object.values(SETTINGS_SLIDERS)) {
+    if (cfg[key] != null) out[key] = cfg[key];
+  }
+  const cb = document.getElementById('cb-nebula');
+  if (cb) out.nebula = cb.checked;
+  const hidden = [];
+  for (const t of Object.keys(typeCounts)) {
+    if (!cfg.visibleTypes.has(t)) hidden.push(t);
+  }
+  out.hiddenTypes = hidden;
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(out)); } catch (_) {}
+}
+loadSettings();
+
+// --- Type filter UI ---
+const tfBox = document.getElementById('type-filter');
+for (const t of Object.keys(typeCounts).sort()) {
+  const row = document.createElement('label');
+  row.className = 's-type';
+  const checkedAttr = cfg.visibleTypes.has(t) ? 'checked' : '';
+  row.innerHTML = `
+    <input type="checkbox" ${checkedAttr} data-type="${escapeHtml(t)}">
+    <span class="swatch" style="background:${typeColor[t] || typeColor.default};color:${typeColor[t] || typeColor.default}"></span>
+    <span class="name">${escapeHtml(t)}</span>
+    <span class="count">${typeCounts[t]}</span>
+  `;
+  tfBox.appendChild(row);
+  row.querySelector('input').addEventListener('change', (ev) => {
+    if (ev.target.checked) cfg.visibleTypes.add(t);
+    else cfg.visibleTypes.delete(t);
+    applyFilter();
+    saveSettings();
+  });
+}
+
+// =============================================================
+// STRENGTH HELPERS
+// =============================================================
+const strNorm = (s) => Math.max(0, Math.min(1, ((s || 1) - 1) / 4));
+function linkDistFor(l) {
+  const sens = cfg.strSens / 100;
+  const mult = 1 - strNorm(l.strength) * 0.7 * sens;
+  return Math.max(4, cfg.dist * mult);
+}
+function linkForceStrFor(l) {
+  const sens = cfg.strSens / 100;
+  return 0.15 + strNorm(l.strength) * 0.7 * sens;
+}
+function linkOpacityFor(l) {
+  const base = cfg.linkOpacity / 100;
+  return Math.max(0.05, base * (0.35 + strNorm(l.strength) * 0.65));
+}
+function linkWidthFor(l) {
+  return (0.8 + strNorm(l.strength) * 3.2) * (cfg.size / 50) * (cfg.edgeThick / 50);
+}
+
+// =============================================================
+// BRIGHTNESS HELPERS
+// =============================================================
+function confBoost(n) {
+  // confidence 1..5 → 0.4..1.0 brightness multiplier
+  const c = Math.max(1, Math.min(5, n.confidence || 1));
+  return 0.4 + (c - 1) / 4 * 0.6;
+}
+const typeBrightness = {
+  principle: 1.55, pattern: 1.05, case: 0.8,
+  entity: 0.9, fact: 0.75, relation: 0.7, unknown: 0.7
+};
+function massHeat(mass) { return Math.min(1, (mass || 1) / maxMass); }
+function sphereRadius(n) {
+  const val = Math.max(1, (n.mass || 4) * cfg.size / 50);
+  return Math.cbrt(val) * 6;
+}
+
+// =============================================================
+// GLOW TEXTURE (shared)
+// =============================================================
+function makeGlowTexture() {
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+  grad.addColorStop(0.00, 'rgba(255,255,255,1)');
+  grad.addColorStop(0.10, 'rgba(255,255,255,0.85)');
+  grad.addColorStop(0.30, 'rgba(255,255,255,0.40)');
+  grad.addColorStop(0.60, 'rgba(255,255,255,0.12)');
+  grad.addColorStop(1.00, 'rgba(255,255,255,0.00)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const GLOW_TEX = makeGlowTexture();
+
+// Ring texture — transparent center, soft colored band, transparent outside.
+// Rendered as a camera-facing sprite behind the node, acts as a domain outline
+// that never occludes the node body.
+function makeRingTexture() {
+  const size = 256;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  ctx.clearRect(0, 0, size, size);
+  ctx.shadowBlur = 14;
+  ctx.shadowColor = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = 14;
+  ctx.strokeStyle = 'rgba(255,255,255,1)';
+  ctx.beginPath();
+  ctx.arc(size / 2, size / 2, size * 0.40, 0, Math.PI * 2);
+  ctx.stroke();
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const RING_TEX = makeRingTexture();
+
+// =============================================================
+// SHARED GEOMETRIES — rebuild on detail slider change
+// =============================================================
+let ICO_HI  = new THREE.IcosahedronGeometry(1, 3);
+let ICO_MID = new THREE.IcosahedronGeometry(1, 2);
+let ICO_LO  = new THREE.IcosahedronGeometry(1, 1);
+// Smooth sphere for planets (patterns) — proper rounded look, shared across nodes.
+let SPHERE_SMOOTH = new THREE.SphereGeometry(1, 48, 24);
+
+// Per-node asteroid geometry — deterministic by id, coherent lumps (not noise).
+// FNV-1a hash → seeded PRNG → 4–6 directional bulges applied on top of IcosahedronGeometry(1,2).
+function hashId(s) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
+  return h >>> 0;
+}
+function seededRand(seed) {
+  let s = (seed || 1) >>> 0;
+  return () => {
+    s = Math.imul(s ^ (s >>> 15), 2246822519) >>> 0;
+    s = Math.imul(s ^ (s >>> 13), 3266489917) >>> 0;
+    s = (s ^ (s >>> 16)) >>> 0;
+    return s / 4294967296;
+  };
+}
+let ASTEROID_BASE_DETAIL = 2;
+const ASTEROID_CACHE = new Map();  // id → { geo, rot:[rx,ry,rz] }
+function buildAsteroidGeoFor(id) {
+  const rng = seededRand(hashId(id));
+  const g = new THREE.IcosahedronGeometry(1, ASTEROID_BASE_DETAIL);
+  const pos = g.attributes.position;
+  const nLumps = 4 + Math.floor(rng() * 3);
+  const lumps = [];
+  for (let k = 0; k < nLumps; k++) {
+    const dx = rng() * 2 - 1, dy = rng() * 2 - 1, dz = rng() * 2 - 1;
+    const len = Math.hypot(dx, dy, dz) || 1;
+    const sign = rng() > 0.55 ? 1 : -1;
+    lumps.push({
+      dx: dx / len, dy: dy / len, dz: dz / len,
+      amp: sign * (0.06 + rng() * 0.11),
+      sharp: 1.5 + rng() * 2.5
+    });
+  }
+  for (let i = 0; i < pos.count; i++) {
+    const x = pos.getX(i), y = pos.getY(i), z = pos.getZ(i);
+    const len = Math.hypot(x, y, z) || 1;
+    const nx = x / len, ny = y / len, nz = z / len;
+    let def = 0;
+    for (const l of lumps) {
+      const d = nx * l.dx + ny * l.dy + nz * l.dz;
+      if (d > 0) def += Math.pow(d, l.sharp) * l.amp;
+    }
+    const scale = 1 + def;
+    pos.setXYZ(i, nx * scale, ny * scale, nz * scale);
+  }
+  g.computeVertexNormals();
+  return { geo: g, rot: [rng() * Math.PI * 2, rng() * Math.PI * 2, rng() * Math.PI * 2] };
+}
+function getAsteroidGeo(id) {
+  let entry = ASTEROID_CACHE.get(id);
+  if (!entry) { entry = buildAsteroidGeoFor(id); ASTEROID_CACHE.set(id, entry); }
+  return entry;
+}
+function clearAsteroidCache() {
+  for (const { geo } of ASTEROID_CACHE.values()) geo.dispose?.();
+  ASTEROID_CACHE.clear();
+}
+function rebuildGeos(resVal) {
+  const level = Math.max(1, Math.min(4, Math.round(resVal / 12)));
+  ICO_HI  = new THREE.IcosahedronGeometry(1, level + 1);
+  ICO_MID = new THREE.IcosahedronGeometry(1, level);
+  ICO_LO  = new THREE.IcosahedronGeometry(1, Math.max(0, level - 1));
+  ASTEROID_BASE_DETAIL = Math.max(1, Math.min(3, level + 1));
+  // Smooth sphere — segments scale with res slider: 16..96 width, 8..48 height.
+  if (SPHERE_SMOOTH) SPHERE_SMOOTH.dispose?.();
+  const wSeg = Math.max(16, Math.min(96, Math.round(resVal * 2)));
+  SPHERE_SMOOTH = new THREE.SphereGeometry(1, wSeg, Math.floor(wSeg / 2));
+  clearAsteroidCache();
+}
+
+// =============================================================
+// HALO / CORE / FLARE / SELECTION — overlay sprites
+// =============================================================
+function addHalo(group, r, color, node) {
+  const tb = typeBrightness[node.type] || 0.8;
+  const heat = massHeat(node.mass);
+  const cb = confBoost(node);
+  const baseOp = (0.35 + heat * 0.4) * tb * cb;
+  const haloSize = r * (3.2 + heat * 2.5) * tb;
+
+  const mat = new THREE.SpriteMaterial({
+    map: GLOW_TEX,
+    color: color.clone().lerp(new THREE.Color(1, 1, 1), heat * 0.45),
+    transparent: true,
+    opacity: baseOp * (cfg.glow / 80),
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  const s = new THREE.Sprite(mat);
+  s.scale.set(haloSize, haloSize, 1);
+  s.renderOrder = -1;
+  s.raycast = () => {};
+  s.userData.__role = 'halo';
+  s.userData.__baseOpacity = baseOp;
+  s.userData.__baseScale = haloSize;
+  group.add(s);
+  return s;
+}
+
+function addCore(group, r, color, node) {
+  const tb = typeBrightness[node.type] || 0.8;
+  const heat = massHeat(node.mass);
+  const cb = confBoost(node);
+  const baseOp = (0.25 + heat * 0.6) * tb * cb;
+
+  const mat = new THREE.SpriteMaterial({
+    map: GLOW_TEX,
+    color: new THREE.Color(1, 1, 1),
+    transparent: true,
+    opacity: baseOp * (cfg.glow / 80),
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  const s = new THREE.Sprite(mat);
+  const coreSize = r * (1.3 + heat * 0.6);
+  s.scale.set(coreSize, coreSize, 1);
+  s.raycast = () => {};
+  s.userData.__role = 'core';
+  s.userData.__baseOpacity = baseOp;
+  group.add(s);
+  return s;
+}
+
+function addCrossFlare(group, r, color, node) {
+  const tb = typeBrightness[node.type] || 0.8;
+  const heat = massHeat(node.mass);
+  const cb = confBoost(node);
+  const baseOp = 0.55 * tb * cb * (0.5 + heat * 0.5);
+  const mk = (rot) => {
+    const mat = new THREE.SpriteMaterial({
+      map: GLOW_TEX,
+      color: color.clone().lerp(new THREE.Color(1, 1, 1), 0.78),
+      transparent: true,
+      opacity: baseOp * (cfg.glow / 80),
+      depthWrite: false,
+      blending: THREE.AdditiveBlending,
+      rotation: rot
+    });
+    const s = new THREE.Sprite(mat);
+    s.scale.set(r * 11, r * 0.45, 1);
+    s.raycast = () => {};
+    s.userData.__role = 'flare';
+    s.userData.__baseOpacity = baseOp;
+    group.add(s);
+  };
+  mk(0);
+  mk(Math.PI / 2);
+}
+
+function addHitSphere(group, r, factor) {
+  const mat = new THREE.MeshBasicMaterial({
+    color: 0xffffff, transparent: true, opacity: 0, depthWrite: false
+  });
+  const hit = new THREE.Mesh(ICO_LO, mat);
+  hit.scale.setScalar(r * (factor || 1.25));
+  hit.userData.__role = 'hit';
+  group.add(hit);
+}
+
+// Camera-facing ring sprite behind the node — domain outline, never occludes.
+function addDomainRing(group, r, hex) {
+  if (!hex) return null;
+  const mat = new THREE.SpriteMaterial({
+    map: RING_TEX,
+    color: new THREE.Color(hex),
+    transparent: true,
+    opacity: 0.9,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+  const s = new THREE.Sprite(mat);
+  const rs = r * 2.6;
+  s.scale.set(rs, rs, 1);
+  s.renderOrder = -2;
+  s.raycast = () => {};
+  s.userData.__role = 'domain-ring';
+  group.add(s);
+  return s;
+}
+
+function addSelectionRing(group, r) {
+  const mat = new THREE.SpriteMaterial({
+    map: GLOW_TEX,
+    color: new THREE.Color(1, 1, 1),
+    transparent: true, opacity: 0.85,
+    depthWrite: false, blending: THREE.AdditiveBlending
+  });
+  const s = new THREE.Sprite(mat);
+  const rs = r * 4.5;
+  s.scale.set(rs, rs, 1);
+  s.raycast = () => {};
+  s.userData.__role = 'select';
+  group.add(s);
+}
+
+// =============================================================
+// TYPE-SPECIFIC NODE MESHES
+// =============================================================
+function makeStar(node) {
+  const group = new THREE.Group();
+  const col = nodeBaseColor(node);
+  const r = sphereRadius(node);
+  // Bright central sphere — white-hot core
+  const mat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.95 });
+  const mesh = new THREE.Mesh(ICO_HI, mat);
+  mesh.scale.setScalar(r);
+  mesh.userData.__role = 'main';
+  group.add(mesh);
+  addHalo(group, r, col, node);
+  addCore(group, r, col, node);
+  addCrossFlare(group, r, col, node);
+  addHitSphere(group, r, 1.4);
+  if (node.id === selectedId) addSelectionRing(group, r);
+  return group;
+}
+
+function makePlanet(node) {
+  const group = new THREE.Group();
+  const col = nodeBaseColor(node);
+  const r = sphereRadius(node);
+  const mat = new THREE.MeshStandardMaterial({
+    color: col, roughness: 0.55, metalness: 0.18, flatShading: false
+  });
+  const mesh = new THREE.Mesh(SPHERE_SMOOTH, mat);
+  mesh.scale.setScalar(r);
+  mesh.userData.__role = 'main';
+  group.add(mesh);
+  addHalo(group, r, col, node);
+  addCore(group, r, col, node);
+  addHitSphere(group, r, 1.3);
+  if (node.id === selectedId) addSelectionRing(group, r);
+  return group;
+}
+
+function makeAsteroid(node) {
+  const group = new THREE.Group();
+  const col = nodeBaseColor(node);
+  const r = sphereRadius(node) * 0.95;
+  const mat = new THREE.MeshStandardMaterial({
+    color: col, roughness: 0.82, metalness: 0.12, flatShading: false
+  });
+  const mesh = new THREE.Mesh(SPHERE_SMOOTH, mat);
+  mesh.scale.setScalar(r);
+  mesh.userData.__role = 'main';
+  group.add(mesh);
+  addHalo(group, r, col, node);
+  addHitSphere(group, r, 1.45);
+  if (node.id === selectedId) addSelectionRing(group, r);
+  return group;
+}
+
+function makeNebula(node) {
+  const group = new THREE.Group();
+  const col = nodeBaseColor(node);
+  const r = sphereRadius(node);
+  const count = 40;
+  const positions = new Float32Array(count * 3);
+  const rr = r * 1.7;
+  for (let i = 0; i < count; i++) {
+    positions[i*3 + 0] = (Math.random() - 0.5) * rr * 2;
+    positions[i*3 + 1] = (Math.random() - 0.5) * rr * 2;
+    positions[i*3 + 2] = (Math.random() - 0.5) * rr * 2;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+  const mat = new THREE.PointsMaterial({
+    color: col, size: r * 0.45, map: GLOW_TEX,
+    transparent: true, opacity: 0.75,
+    depthWrite: false, blending: THREE.AdditiveBlending,
+    sizeAttenuation: true
+  });
+  const pts = new THREE.Points(geo, mat);
+  pts.userData.__role = 'nebula-cloud';
+  group.add(pts);
+
+  // Invisible hit sphere for reliable clicks
+  const hitMat = new THREE.MeshBasicMaterial({
+    color: 0xffffff, transparent: true, opacity: 0, depthWrite: false
+  });
+  const hit = new THREE.Mesh(ICO_LO, hitMat);
+  hit.scale.setScalar(r * 1.2);
+  hit.userData.__role = 'main';
+  group.add(hit);
+
+  addHalo(group, r, col, node);
+  if (node.id === selectedId) addSelectionRing(group, r);
+  return group;
+}
+
+function makeSatellite(node) {
+  const group = new THREE.Group();
+  const col = nodeBaseColor(node);
+  const r = sphereRadius(node) * 0.7;
+
+  // tilt the satellite in a random orientation
+  const sub = new THREE.Group();
+  sub.rotation.set(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, 0);
+
+  const bodyMat = new THREE.MeshStandardMaterial({
+    color: col, roughness: 0.4, metalness: 0.6
+  });
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(r*0.35, r*0.35, r, 10), bodyMat);
+  body.rotation.x = Math.PI / 2;
+  body.userData.__role = 'main';
+  sub.add(body);
+
+  const panelMat = new THREE.MeshStandardMaterial({
+    color: 0x2244aa, emissive: 0x122244, emissiveIntensity: 0.4,
+    roughness: 0.3, metalness: 0.7
+  });
+  const p1 = new THREE.Mesh(new THREE.BoxGeometry(r*1.5, r*0.06, r*0.5), panelMat);
+  const p2 = p1.clone();
+  p1.position.x = r * 1.0;
+  p2.position.x = -r * 1.0;
+  sub.add(p1, p2);
+
+  group.add(sub);
+  addHalo(group, r * 0.9, col, node);
+  addHitSphere(group, r, 1.8);
+  if (node.id === selectedId) addSelectionRing(group, r);
+  return group;
+}
+
+function makeRing(node) {
+  const group = new THREE.Group();
+  const col = nodeBaseColor(node);
+  const r = sphereRadius(node) * 0.8;
+  const mat = new THREE.MeshStandardMaterial({
+    color: col, roughness: 0.3, metalness: 0.75,
+    transparent: true, opacity: 0.9
+  });
+  const torus = new THREE.Mesh(new THREE.TorusGeometry(r, r * 0.14, 8, 24), mat);
+  torus.rotation.set(Math.random() * Math.PI * 2, Math.random() * Math.PI * 2, 0);
+  torus.userData.__role = 'main';
+  group.add(torus);
+  addHalo(group, r, col, node);
+  addHitSphere(group, r, 1.6);
+  if (node.id === selectedId) addSelectionRing(group, r);
+  return group;
+}
+
+function makeNodeMesh(node) {
+  let g;
+  switch (node.type) {
+    case 'principle': g = makeStar(node); break;
+    case 'pattern':   g = makePlanet(node); break;
+    case 'case':      g = makeAsteroid(node); break;
+    case 'entity':    g = makeNebula(node); break;
+    case 'fact':      g = makeSatellite(node); break;
+    case 'relation':  g = makeRing(node); break;
+    default:          g = makePlanet(node); break;
+  }
+  g.userData.__nodeId = node.id;
+  const dAccent = domainAccent(node);
+  if (dAccent) addDomainRing(g, sphereRadius(node), dAccent);
+  return g;
+}
+
+// =============================================================
+// LINKS — MeshLine with THREE.Line fallback
+// =============================================================
+function endColor(end) {
+  if (typeof end === 'object' && end) return nodeBaseColor(end);
+  return new THREE.Color(typeColor.default);
+}
+
+function makeLinkObject(link) {
+  const sc = endColor(link.source);
+  const tc = endColor(link.target);
+  const mix = sc.clone().lerp(tc, 0.5);
+
+  if (Line2 && LineGeometry && LineMaterial) {
+    const geo = new LineGeometry();
+    geo.setPositions([0, 0, 0, 0, 0, 0.001]);
+    const mat = new LineMaterial({
+      color: mix.getHex(),
+      linewidth: linkWidthFor(link),
+      worldUnits: true,
+      transparent: true,
+      opacity: linkOpacityFor(link),
+      depthWrite: false,
+      dashed: false,
+      alphaToCoverage: false,
+      resolution: new THREE.Vector2(window.innerWidth, window.innerHeight)
+    });
+    const line = new Line2(geo, mat);
+    line.computeLineDistances();
+    line.raycast = () => {};
+    line.userData.__linkRef = link;
+    line.userData.__linkMode = 'line2';
+    line.frustumCulled = false;
+    return line;
+  }
+
+  // Fallback: THREE.Line with vertex-color gradient
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(new Float32Array(6), 3));
+  geo.setAttribute('color', new THREE.Float32BufferAttribute(
+    [sc.r, sc.g, sc.b, tc.r, tc.g, tc.b], 3));
+  const mat = new THREE.LineBasicMaterial({
+    vertexColors: true, transparent: true,
+    opacity: linkOpacityFor(link), depthWrite: false
+  });
+  const line = new THREE.Line(geo, mat);
+  line.userData.__linkRef = link;
+  line.userData.__linkMode = 'line';
+  return line;
+}
+
+function updateLinkPosition(obj, { start, end }) {
+  // Guard: skip when positions not yet defined or zero-length (avoids NaN)
+  const sx = start.x, sy = start.y, sz = start.z;
+  const ex = end.x,   ey = end.y,   ez = end.z;
+  if ([sx, sy, sz, ex, ey, ez].some(v => !isFinite(v))) return true;
+  const dx = ex - sx, dy = ey - sy, dz = ez - sz;
+  if (dx * dx + dy * dy + dz * dz < 1e-6) return true;
+
+  if (obj.userData.__linkMode === 'line2') {
+    // Restore LineGeometry if the lib's fallback default path replaced our
+    // instanced-attribute layout with vanilla position via setFromPoints.
+    let g = obj.geometry;
+    if (typeof g.setPositions !== 'function' || !g.isLineGeometry) {
+      g = new LineGeometry();
+      obj.geometry = g;
+    }
+    g.setPositions([sx, sy, sz, ex, ey, ez]);
+    obj.computeLineDistances();
+    return true;
+  }
+
+  const p = obj.geometry.attributes.position.array;
+  p[0] = sx; p[1] = sy; p[2] = sz;
+  p[3] = ex; p[4] = ey; p[5] = ez;
+  obj.geometry.attributes.position.needsUpdate = true;
+  return true;
+}
+
+// =============================================================
+// GRAPH
+// =============================================================
+const Graph = ForceGraph3D()(document.getElementById('universe'))
+  .backgroundColor('#050510')
+  .graphData({ nodes: allNodes, links: allLinks })
+  .nodeLabel(n => `
+    <div style="padding:8px 12px;background:rgba(16,16,28,0.95);
+                border:1px solid rgba(120,120,180,0.35);border-radius:6px;
+                color:#e8e8f0;font-size:12px;max-width:320px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:3px">${escapeHtml(n.name)}</div>
+      <div style="opacity:0.55;font-size:10px;text-transform:uppercase;letter-spacing:0.5px">
+        ${escapeHtml(n.type || '')} · conf ${n.confidence ?? '—'} · impact ${n.impact ?? '—'} · mass ${n.mass ?? '—'}
+      </div>
+    </div>
+  `)
+  .nodeVal(n => Math.max(1, (n.mass || 4) * cfg.size / 50))
+  .nodeRelSize(6)
+  .nodeOpacity(0)
+  .nodeThreeObjectExtend(true)
+  .nodeThreeObject(makeNodeMesh)
+  .linkThreeObject(makeLinkObject)
+  .linkPositionUpdate(updateLinkPosition)
+  .showNavInfo(false)
+  .enableNodeDrag(false)
+  .cooldownTicks(120)
+  .onNodeClick(node => { selectNode(node); })
+  .onNodeHover(node => {
+    hoveredId = node ? node.id : null;
+    document.body.style.cursor = node ? 'pointer' : '';
+  })
+  .onBackgroundClick(() => {
+    if (selectedId != null) {
+      selectedId = null;
+      hideInfo();
+      Graph.refresh();
+    }
+  });
+
+// Debug aid — expose Graph and THREE for playwright probes / console poking
+window.Graph = Graph;
+window.THREE = THREE;
+
+// =============================================================
+// TOLERANT CLICK DETECTION
+// OrbitControls consumes any mousedown→mousemove→mouseup as orbit
+// even for 1-2px shake. Implement pointerdown/up click with tolerance.
+// =============================================================
+(function installTolerantClick() {
+  const canvas = document.querySelector('#universe canvas');
+  if (!canvas) return;
+  let downX = 0, downY = 0, downT = 0, downBtn = -1;
+  const MOVE_TOL = 6;   // px
+  const TIME_TOL = 500; // ms
+
+  canvas.addEventListener('pointerdown', e => {
+    downX = e.clientX; downY = e.clientY; downT = performance.now(); downBtn = e.button;
+  });
+
+  function raycastNodeAt(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const ndc = new THREE.Vector2(
+      ((clientX - rect.left) / rect.width) * 2 - 1,
+      -((clientY - rect.top) / rect.height) * 2 + 1
+    );
+    const ray = new THREE.Raycaster();
+    ray.setFromCamera(ndc, Graph.camera());
+    const hits = ray.intersectObjects(Graph.scene().children, true);
+    for (const h of hits) {
+      let o = h.object;
+      while (o && o.userData?.__nodeId == null) o = o.parent;
+      if (o && o.userData?.__nodeId != null) {
+        const node = nodeById.get(o.userData.__nodeId);
+        if (node) return node;
+      }
+    }
+    return null;
+  }
+
+  canvas.addEventListener('pointerup', e => {
+    // Right-click (button 2) — context menu on node
+    if (e.button === 2 && downBtn === 2) {
+      const dx = e.clientX - downX, dy = e.clientY - downY;
+      if (Math.hypot(dx, dy) > MOVE_TOL) return;
+      const node = raycastNodeAt(e.clientX, e.clientY);
+      if (node) {
+        e.preventDefault();
+        showContextMenu(node, e.clientX, e.clientY);
+      } else {
+        hideContextMenu();
+      }
+      return;
+    }
+    if (e.button !== 0 || downBtn !== 0) return;
+    const dx = e.clientX - downX, dy = e.clientY - downY;
+    const dist = Math.hypot(dx, dy);
+    const dt = performance.now() - downT;
+    if (dist > MOVE_TOL || dt > TIME_TOL) return;  // was a drag or long-press, not a click
+
+    hideContextMenu();
+    const node = raycastNodeAt(e.clientX, e.clientY);
+    if (node) { selectNode(node); return; }
+    // Clicked background — close info panel if open
+    if (selectedId != null) {
+      selectedId = null;
+      hideInfo();
+      Graph.refresh();
+    }
+  });
+
+  // Suppress browser default context menu over the canvas so our custom one shows instead
+  canvas.addEventListener('contextmenu', e => e.preventDefault());
+})();
+
+// =============================================================
+// CONTEXT MENU — right-click node → Open / Archive / Delete
+// =============================================================
+const ctxMenu = document.getElementById('ctxmenu');
+const ctxTitle = document.getElementById('cm-title');
+let ctxNode = null;
+
+function showContextMenu(node, x, y) {
+  ctxNode = node;
+  ctxTitle.textContent = node.name || `#${node.id}`;
+  ctxMenu.style.display = 'block';
+  // Position, keeping menu on-screen
+  const mw = ctxMenu.offsetWidth, mh = ctxMenu.offsetHeight;
+  const maxX = window.innerWidth - mw - 4;
+  const maxY = window.innerHeight - mh - 4;
+  ctxMenu.style.left = Math.min(x, maxX) + 'px';
+  ctxMenu.style.top  = Math.min(y, maxY) + 'px';
+}
+
+function hideContextMenu() {
+  ctxMenu.style.display = 'none';
+  ctxNode = null;
+}
+
+async function callNodeOp(op, nodeId) {
+  const resp = await fetch(`/api/node/${op}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id: nodeId })
+  });
+  const data = await resp.json().catch(() => ({ ok: false, error: 'bad response' }));
+  if (!resp.ok || !data.ok) {
+    alert('Ошибка: ' + (data.error || resp.statusText));
+    return false;
+  }
+  return data;
+}
+
+function removeNodeFromGraph(nodeId) {
+  const gd = Graph.graphData();
+  const nodes = gd.nodes.filter(n => n.id !== nodeId);
+  const links = gd.links.filter(l => {
+    const s = typeof l.source === 'object' ? l.source.id : l.source;
+    const t = typeof l.target === 'object' ? l.target.id : l.target;
+    return s !== nodeId && t !== nodeId;
+  });
+  Graph.graphData({ nodes, links });
+  // Also prune from the master arrays so applyFilter stays consistent
+  const ai = allNodes.findIndex(n => n.id === nodeId);
+  if (ai >= 0) allNodes.splice(ai, 1);
+  for (let i = allLinks.length - 1; i >= 0; i--) {
+    const l = allLinks[i];
+    const s = typeof l.source === 'object' ? l.source.id : l.source;
+    const t = typeof l.target === 'object' ? l.target.id : l.target;
+    if (s === nodeId || t === nodeId) allLinks.splice(i, 1);
+  }
+  nodeById.delete(nodeId);
+  if (selectedId === nodeId) { selectedId = null; hideInfo(); }
+}
+
+ctxMenu.addEventListener('click', async (ev) => {
+  const item = ev.target.closest('.cm-item');
+  if (!item || !ctxNode) return;
+  const op = item.dataset.op;
+  const node = ctxNode;
+  hideContextMenu();
+  if (op === 'open') {
+    await callNodeOp('open', node.id);
+    return;
+  }
+  if (op === 'archive') {
+    if (!confirm(`Переместить «${node.name}» в архив?\n\nФайл уедет в ~/.claude/global-lessons/_archive/ и исчезнет из графа. Можно вернуть вручную.`)) return;
+    const r = await callNodeOp('archive', node.id);
+    if (r) removeNodeFromGraph(node.id);
+    return;
+  }
+  if (op === 'delete') {
+    if (!confirm(`Удалить «${node.name}» НАВСЕГДА?\n\nФайл будет стёрт без возможности восстановления (только через git).`)) return;
+    if (!confirm(`Точно удалить «${node.name}»?\nЭто необратимо.`)) return;
+    const r = await callNodeOp('delete', node.id);
+    if (r) removeNodeFromGraph(node.id);
+    return;
+  }
+});
+
+// Hide menu on any outside click or Esc
+document.addEventListener('pointerdown', (e) => {
+  if (ctxMenu.style.display !== 'block') return;
+  if (e.target.closest('#ctxmenu')) return;
+  hideContextMenu();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') hideContextMenu();
+});
+
+// Lighting for MeshStandard materials (planets, asteroids, satellites, rings)
+Graph.scene().add(new THREE.AmbientLight(0x404060, 1.3));
+const keyLight = new THREE.DirectionalLight(0xffffff, 1.1);
+keyLight.position.set(1, 1, 1);
+Graph.scene().add(keyLight);
+const rimLight = new THREE.DirectionalLight(0x6688ff, 0.4);
+rimLight.position.set(-1, -1, -1);
+Graph.scene().add(rimLight);
+
+Graph.d3Force('charge').strength(-cfg.charge);
+Graph.d3Force('link').distance(linkDistFor).strength(linkForceStrFor);
+
+// =============================================================
+// DOMAIN GRAVITY (v1.2.0) — self-organizing galaxies via stable anchors.
+// Each distinct domain gets a FIXED anchor point on a sphere
+// (Fibonacci/golden-angle distribution seeded by hashId(domain)).
+// Nodes are pulled toward the mean of their domains' anchors.
+// Anchors are stable (don't move), so force-directed naturally
+// builds one galaxy per domain. Nodes shared across domains
+// settle between their anchors — "bridge stars".
+// =============================================================
+const GRAVITY_ANCHOR_RADIUS = 600;
+const __anchorCache = new Map();
+function domainAnchor(dom) {
+  let a = __anchorCache.get(dom);
+  if (a) return a;
+  // Deterministic pseudo-uniform point on a unit sphere from hashId(dom).
+  // Use golden-angle spiral with hash → index, gives good visual spread.
+  const h = hashId(dom);
+  const idx = (h % 997) + 1;  // 1..997
+  const t = idx / 998;
+  const phi = Math.acos(1 - 2 * t);
+  const theta = Math.PI * (1 + Math.sqrt(5)) * idx;
+  a = {
+    x: GRAVITY_ANCHOR_RADIUS * Math.sin(phi) * Math.cos(theta),
+    y: GRAVITY_ANCHOR_RADIUS * Math.sin(phi) * Math.sin(theta),
+    z: GRAVITY_ANCHOR_RADIUS * Math.cos(phi)
+  };
+  __anchorCache.set(dom, a);
+  return a;
+}
+function domainGravityForce() {
+  let nodes = [];
+  let strength = 0.03;
+  function force(alpha) {
+    for (const n of nodes) {
+      const doms = parseDomains(n.domain);
+      if (!doms.length) continue;
+      let tx = 0, ty = 0, tz = 0, w = 0;
+      for (const d of doms) {
+        const a = domainAnchor(d);
+        tx += a.x; ty += a.y; tz += a.z; w++;
+      }
+      if (!w) continue;
+      tx /= w; ty /= w; tz /= w;
+      const k = strength * alpha;
+      n.vx = (n.vx || 0) + (tx - n.x) * k;
+      n.vy = (n.vy || 0) + (ty - n.y) * k;
+      n.vz = (n.vz || 0) + (tz - n.z) * k;
+    }
+  }
+  force.initialize = (_nodes) => { nodes = _nodes || []; };
+  force.strength = function(s) {
+    if (!arguments.length) return strength;
+    strength = s; return force;
+  };
+  return force;
+}
+window.domainAnchor = domainAnchor;
+const domainGravity = domainGravityForce().strength(cfg.gravity / 1000);
+Graph.d3Force('domain-gravity', domainGravity);
+
+// =============================================================
+// DOMAIN CENTERS (rc.2.a) — group nodes by domain (CSV field),
+// compute center-of-mass + bounding radius. Renders nothing;
+// provides geometry for nebula clouds in rc.2.b+.
+// =============================================================
+function parseDomains(raw) {
+  return String(raw || '')
+    .split(',').map(s => s.trim()).filter(Boolean);
+}
+function computeDomainCenters(nodes) {
+  const src = nodes || allNodes;
+  const buckets = new Map();  // domain → { nodes:[], sumX, sumY, sumZ }
+  for (const n of src) {
+    if (!isFinite(n.x) || !isFinite(n.y) || !isFinite(n.z)) continue;
+    const doms = parseDomains(n.domain);
+    const keys = doms.length ? doms : ['__uncategorized__'];
+    for (const d of keys) {
+      let b = buckets.get(d);
+      if (!b) { b = { nodes: [], sumX: 0, sumY: 0, sumZ: 0 }; buckets.set(d, b); }
+      b.nodes.push(n);
+      b.sumX += n.x; b.sumY += n.y; b.sumZ += n.z;
+    }
+  }
+  const out = new Map();
+  for (const [dom, b] of buckets) {
+    const c = b.nodes.length;
+    const cx = b.sumX / c, cy = b.sumY / c, cz = b.sumZ / c;
+    let r = 0;
+    for (const n of b.nodes) {
+      const d = Math.hypot(n.x - cx, n.y - cy, n.z - cz);
+      if (d > r) r = d;
+    }
+    out.set(dom, { cx, cy, cz, r, nodeCount: c });
+  }
+  return out;
+}
+window.computeDomainCenters = computeDomainCenters;
+
+// =============================================================
+// NEBULA (rc.2.b — MVP, rc.2.c — shader falloff, rc.2.d — multi-domain palette)
+// Gaussian-distributed THREE.Points per domain with per-vertex alpha
+// (exp(-r²/σ²)), additive blending, per-domain hue from hashId(domain).
+// =============================================================
+const NEBULA_POINTS_PER_DOMAIN = 500;
+const NEBULA_SIGMA_FACTOR = 0.55;   // σ = r * this
+const NEBULA_RADIUS_PAD = 1.35;
+const NEBULA_MIN_RADIUS = 80;
+const NEBULA_POINT_SIZE = 22;       // base sprite size (px at ref distance)
+const NEBULA_CORE_ALPHA = 0.55;     // alpha at center
+const NEBULA_MAX_DOMAINS = 12;      // render top-N domains by nodeCount
+
+let nebulaGroup = null;
+let nebulaEnabled = document.getElementById('cb-nebula')?.checked ?? true;
+
+function gaussian(rng) {
+  // Box-Muller
+  let u = 0, v = 0;
+  while (u === 0) u = rng();
+  while (v === 0) v = rng();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+// hash domain name → hue ∈ [0,360). Deterministic palette.
+function domainColor(dom) {
+  const h = hashId(dom) / 4294967296; // 0..1
+  return new THREE.Color().setHSL(h, 0.60, 0.62);
+}
+
+function buildNebulaGeometry(center, seed) {
+  // Positions are stored RELATIVE to origin; the Points object's .position
+  // tracks the center-of-mass (enables cheap live updates — rc.2.e).
+  const rng = seededRand(seed);
+  const count = NEBULA_POINTS_PER_DOMAIN;
+  const sigma = Math.max(NEBULA_MIN_RADIUS, center.r * NEBULA_RADIUS_PAD) * NEBULA_SIGMA_FACTOR;
+  const pos = new Float32Array(count * 3);
+  const aAlpha = new Float32Array(count);
+  const aScale = new Float32Array(count);
+  for (let i = 0; i < count; i++) {
+    const gx = gaussian(rng), gy = gaussian(rng), gz = gaussian(rng);
+    pos[i*3 + 0] = gx * sigma;
+    pos[i*3 + 1] = gy * sigma;
+    pos[i*3 + 2] = gz * sigma;
+    const r2 = gx*gx + gy*gy + gz*gz;
+    aAlpha[i] = NEBULA_CORE_ALPHA * Math.exp(-r2 / 2);
+    aScale[i] = 0.6 + rng() * 0.8;
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+  geo.setAttribute('aAlpha',  new THREE.Float32BufferAttribute(aAlpha, 1));
+  geo.setAttribute('aScale',  new THREE.Float32BufferAttribute(aScale, 1));
+  geo.boundingSphere = new THREE.Sphere(new THREE.Vector3(), sigma * 4);
+  return geo;
+}
+
+function buildNebulaMaterial(color) {
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: color },
+      uMap:   { value: GLOW_TEX },
+      uSize:  { value: NEBULA_POINT_SIZE },
+      uGlow:  { value: cfg.glow / 80 }
+    },
+    vertexShader: /* glsl */ `
+      attribute float aAlpha;
+      attribute float aScale;
+      uniform float uSize;
+      varying float vAlpha;
+      void main() {
+        vAlpha = aAlpha;
+        vec4 mv = modelViewMatrix * vec4(position, 1.0);
+        // size attenuation — point shrinks with distance like 3d-force-graph conv.
+        gl_PointSize = uSize * aScale * (300.0 / -mv.z);
+        gl_Position = projectionMatrix * mv;
+      }
+    `,
+    fragmentShader: /* glsl */ `
+      uniform sampler2D uMap;
+      uniform vec3 uColor;
+      uniform float uGlow;
+      varying float vAlpha;
+      void main() {
+        vec4 tx = texture2D(uMap, gl_PointCoord);
+        // texture is white radial → tint by uColor, modulate by per-vertex alpha + glow slider
+        gl_FragColor = vec4(uColor, tx.a * vAlpha * uGlow);
+      }
+    `,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending
+  });
+}
+
+function clearNebulae() {
+  if (!nebulaGroup) return;
+  nebulaGroup.traverse(o => {
+    o.geometry?.dispose?.();
+    o.material?.dispose?.();
+  });
+  Graph.scene().remove(nebulaGroup);
+  nebulaGroup = null;
+}
+
+function renderNebulae(centers) {
+  clearNebulae();
+  if (!nebulaEnabled) return;
+  nebulaGroup = new THREE.Group();
+  nebulaGroup.userData.__role = 'nebula-group';
+  // rc.2.d: render top-N domains by nodeCount, each with own palette hue
+  const ranked = [...centers.entries()]
+    .filter(([dom]) => dom !== '__uncategorized__')
+    .sort((a, b) => b[1].nodeCount - a[1].nodeCount)
+    .slice(0, NEBULA_MAX_DOMAINS);
+  if (!ranked.length) return;
+  for (const [dom, center] of ranked) {
+    const geo = buildNebulaGeometry(center, hashId(dom));
+    const mat = buildNebulaMaterial(domainColor(dom));
+    const pts = new THREE.Points(geo, mat);
+    pts.position.set(center.cx, center.cy, center.cz);
+    pts.frustumCulled = false;
+    pts.renderOrder = -1;
+    pts.raycast = () => {};
+    pts.userData.__nebulaDomain = dom;
+    nebulaGroup.add(pts);
+  }
+  Graph.scene().add(nebulaGroup);
+  console.log(`[nebula] rendered ${ranked.length} domain clouds:`,
+    ranked.map(([d, c]) => `${d}(${c.nodeCount})`).join(', '));
+}
+
+// rc.2.e: track center-of-mass live during simulation (throttled).
+function syncNebulaCenters() {
+  if (!nebulaGroup || !nebulaEnabled) return;
+  const centers = computeDomainCenters();
+  window.__domainCenters = centers;
+  nebulaGroup.children.forEach(pts => {
+    const dom = pts.userData.__nebulaDomain;
+    const c = centers.get(dom);
+    if (c) pts.position.set(c.cx, c.cy, c.cz);
+  });
+}
+
+function updateNebulaGlow() {
+  if (!nebulaGroup) return;
+  const g = cfg.glow / 80;
+  nebulaGroup.traverse(o => {
+    if (o.material && o.material.uniforms && o.material.uniforms.uGlow) {
+      o.material.uniforms.uGlow.value = g;
+    }
+  });
+}
+
+// Throttle live tracking: update nebula centers every N ticks while sim runs.
+const NEBULA_TICK_EVERY = 10;
+let __tickCount = 0;
+Graph.onEngineTick(() => {
+  __tickCount++;
+  if (__tickCount % NEBULA_TICK_EVERY !== 0) return;
+  if (!nebulaGroup) {
+    // first tick with valid positions — build the nebula
+    const centers = computeDomainCenters();
+    if (centers.size && [...centers.values()][0].nodeCount > 0) {
+      window.__domainCenters = centers;
+      renderNebulae(centers);
+    }
+  } else {
+    syncNebulaCenters();
+  }
+});
+Graph.onEngineStop(() => {
+  window.__domainCenters = computeDomainCenters();
+  console.log(`[domain-centers] ${window.__domainCenters.size} доменов,`,
+    [...window.__domainCenters.entries()].map(([d, v]) =>
+      `${d}:${v.nodeCount}/r=${v.r.toFixed(1)}`).join(' · '));
+  renderNebulae(window.__domainCenters);
+});
+
+function selectNode(node) {
+  selectedId = node.id;
+  showInfo(node);
+  softDolly(node);
+  Graph.refresh();
+}
+
+function softDolly(node) {
+  const dx = node.x || 0, dy = node.y || 0, dz = node.z || 0;
+  const dlen = Math.hypot(dx, dy, dz) || 1;
+  const offset = 260;
+  const nx = dx + (dx / dlen) * offset;
+  const ny = dy + (dy / dlen) * offset;
+  const nz = dz + (dz / dlen) * offset;
+  Graph.cameraPosition({ x: nx, y: ny, z: nz }, { x: dx, y: dy, z: dz }, 2000);
+}
+
+function flashNode(nodeId, duration = 700) {
+  const scene = Graph.scene();
+  let targetGroup = null;
+  scene.traverse(obj => {
+    if (!targetGroup && obj.userData && obj.userData.__nodeId === nodeId) targetGroup = obj;
+  });
+  if (!targetGroup) return;
+  const node = nodeById.get(nodeId);
+  if (!node) return;
+  const r = sphereRadius(node);
+  const mat = new THREE.SpriteMaterial({
+    map: GLOW_TEX,
+    color: nodeBaseColor(node).lerp(new THREE.Color(1, 1, 1), 0.5),
+    transparent: true, opacity: 1,
+    depthWrite: false, blending: THREE.AdditiveBlending
+  });
+  const s = new THREE.Sprite(mat);
+  s.scale.set(r * 2, r * 2, 1);
+  s.raycast = () => {};
+  targetGroup.add(s);
+  const start = performance.now();
+  function step(now) {
+    const t = (now - start) / duration;
+    if (t >= 1) { targetGroup.remove(s); mat.dispose(); return; }
+    mat.opacity = 1 - t;
+    s.scale.setScalar(r * (2 + t * 5));
+    requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
+// =============================================================
+// INFO PANEL
+// =============================================================
+const infoBox = document.getElementById('info');
+
+function buildEdgesList(node) {
+  const groups = new Map();
+  for (const l of allLinks) {
+    const s = (typeof l.source === 'object' && l.source) ? l.source.id : l.source;
+    const t = (typeof l.target === 'object' && l.target) ? l.target.id : l.target;
+    let otherId = null;
+    if (s === node.id) otherId = t;
+    else if (t === node.id) otherId = s;
+    else continue;
+    const other = nodeById.get(otherId);
+    if (!other) continue;
+    if (!groups.has(otherId)) groups.set(otherId, { node: other, types: new Set(), strength: l.strength || 1 });
+    groups.get(otherId).types.add(l.type || 'relation');
+    groups.get(otherId).strength = Math.max(groups.get(otherId).strength, l.strength || 1);
+  }
+  if (!groups.size) return '';
+  const items = [...groups.values()].sort((a, b) =>
+    (b.strength - a.strength) || (a.node.name || '').localeCompare(b.node.name || '')
+  );
+  const rows = items.map(g => {
+    const typesHtml = [...g.types].map(t =>
+      `<span class="e-type">${escapeHtml(edgeTypeRu[t] || t)}</span>`
+    ).join(' ');
+    const color = typeColor[g.node.type] || typeColor.default;
+    return `
+      <div class="i-edge" data-node-id="${g.node.id}">
+        <div class="e-name" style="color:${color}">${escapeHtml(g.node.name || '#' + g.node.id)}</div>
+        <div class="e-meta">${typesHtml} · прочн ${g.strength}</div>
+      </div>`;
+  }).join('');
+  return `
+    <div class="i-edges">
+      <div class="fk" style="font-size:10px;text-transform:uppercase;letter-spacing:0.5px;opacity:0.45;margin-bottom:4px">
+        связи (${items.length})
+      </div>
+      ${rows}
+    </div>
+  `;
+}
+
+function showInfo(n) {
+  const color = typeColor[n.type] || typeColor.default;
+  const cell = (k, v) => `<div class="i-cell"><div class="i-cell-label">${k}</div><div class="i-cell-val">${v}</div></div>`;
+  const field = (k, v) => v ? `<div class="i-field"><div class="fk">${k}</div><div class="fv">${v}</div></div>` : '';
+  const tagsHtml = (n.tags || '')
+    .split(',').map(s => s.trim()).filter(Boolean)
+    .map(t => `<span class="tag">${escapeHtml(t)}</span>`).join('');
+  const domHtml = (n.domain || '')
+    .split(',').map(s => s.trim()).filter(Boolean)
+    .map(d => `<span class="tag">${escapeHtml(d)}</span>`).join('');
+  const rs = (n.reliability ?? 0) >= 0 ? `+${n.reliability ?? 0}` : `${n.reliability ?? 0}`;
+  infoBox.innerHTML = `
+    <div class="i-head">
+      <div class="i-swatch" style="background:${color};color:${color}"></div>
+      <div class="i-title-box">
+        <div class="i-title">${escapeHtml(n.name)}</div>
+        <div class="i-type">${escapeHtml(n.type || '')} · ${escapeHtml(n.status || 'active')}</div>
+      </div>
+      <div class="i-close" title="Закрыть">×</div>
+    </div>
+    <div class="i-grid">
+      ${cell('уверенность', n.confidence ?? '—')}
+      ${cell('влияние', n.impact ?? '—')}
+      ${cell('масса', n.mass ?? '—')}
+    </div>
+    <div class="i-grid" style="margin-top:-9px">
+      ${cell('надёжн.', rs)}
+      ${cell('подтв.', n.confirmed_count ?? 0)}
+      ${cell('опроверг.', n.contradicted_count ?? 0)}
+    </div>
+    ${n.summary ? `<div class="i-summary">${escapeHtml(n.summary)}</div>` : ''}
+    ${field('домен', domHtml)}
+    ${field('теги', tagsHtml)}
+    ${buildEdgesList(n)}
+  `;
+  infoBox.querySelector('.i-close').addEventListener('click', () => {
+    selectedId = null;
+    hideInfo();
+    Graph.refresh();
+  });
+  infoBox.querySelectorAll('.i-edge').forEach(row => {
+    const id = +row.dataset.nodeId;
+    row.addEventListener('mouseenter', () => flashNode(id));
+    row.addEventListener('click', () => {
+      const target = nodeById.get(id);
+      if (!target) return;
+      flashNode(id);
+      selectNode(target);
+    });
+  });
+  infoBox.classList.add('visible');
+}
+function hideInfo() { infoBox.classList.remove('visible'); }
+
+// =============================================================
+// FILTER
+// =============================================================
+function applyFilter() {
+  const visibleNodes = allNodes.filter(n =>
+    cfg.visibleTypes.has(n.type) &&
+    (n.confidence || 1) >= cfg.minConfidence
+  );
+  const visibleIds = new Set(visibleNodes.map(n => n.id));
+  const visibleLinks = allLinks.filter(l => {
+    const s = typeof l.source === 'object' ? l.source.id : l.source;
+    const t = typeof l.target === 'object' ? l.target.id : l.target;
+    return visibleIds.has(s) && visibleIds.has(t);
+  });
+  Graph.graphData({ nodes: visibleNodes, links: visibleLinks });
+  document.getElementById('stats').textContent =
+    `${visibleNodes.length}/${allNodes.length} узлов · ${visibleLinks.length}/${allLinks.length} рёбер`;
+}
+
+// =============================================================
+// COSMIC WIND — ambient particle drift
+// =============================================================
+const WIND_COUNT = 600;
+const WIND_BOUNDS = 1500;
+let windPoints = null;
+let windGeo = null;
+
+function makeWindTexture() {
+  const size = 64;
+  const c = document.createElement('canvas');
+  c.width = c.height = size;
+  const ctx = c.getContext('2d');
+  const grad = ctx.createRadialGradient(size/2, size/2, 0, size/2, size/2, size/2);
+  grad.addColorStop(0, 'rgba(220,220,255,1)');
+  grad.addColorStop(0.5, 'rgba(200,200,255,0.3)');
+  grad.addColorStop(1, 'rgba(200,200,255,0)');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, size, size);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+const WIND_TEX = makeWindTexture();
+
+function initWind() {
+  const positions = new Float32Array(WIND_COUNT * 3);
+  const velocities = new Float32Array(WIND_COUNT);
+  for (let i = 0; i < WIND_COUNT; i++) {
+    positions[i*3]     = (Math.random() - 0.5) * WIND_BOUNDS * 2;
+    positions[i*3 + 1] = (Math.random() - 0.5) * WIND_BOUNDS * 2;
+    positions[i*3 + 2] = (Math.random() - 0.5) * WIND_BOUNDS * 2;
+    velocities[i] = 0.3 + Math.random() * 0.7;
+  }
+  windGeo = new THREE.BufferGeometry();
+  windGeo.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+  windGeo.__velocities = velocities;
+  const mat = new THREE.PointsMaterial({
+    map: WIND_TEX, size: 3.5, color: 0xcfcfff,
+    transparent: true, opacity: 0.3, depthWrite: false,
+    blending: THREE.AdditiveBlending, sizeAttenuation: true
+  });
+  windPoints = new THREE.Points(windGeo, mat);
+  windPoints.frustumCulled = false;
+  windPoints.renderOrder = -3;
+  Graph.scene().add(windPoints);
+  updateWindVisibility();
+}
+
+function updateWindVisibility() {
+  if (!windPoints) return;
+  const v = cfg.wind / 100;
+  windPoints.material.opacity = 0.3 * v;
+  windPoints.visible = v > 0.01;
+}
+
+function tickWind() {
+  if (!windPoints || cfg.wind <= 0) return;
+  const strength = cfg.wind / 100;
+  const pos = windGeo.attributes.position.array;
+  const vel = windGeo.__velocities;
+  const dx = 2.5 * strength;
+  const B = WIND_BOUNDS;
+  for (let i = 0; i < WIND_COUNT; i++) {
+    pos[i*3] += dx * vel[i];
+    if (pos[i*3] > B) {
+      pos[i*3] = -B;
+      pos[i*3 + 1] = (Math.random() - 0.5) * B * 2;
+      pos[i*3 + 2] = (Math.random() - 0.5) * B * 2;
+    }
+  }
+  windGeo.attributes.position.needsUpdate = true;
+}
+
+initWind();
+
+// =============================================================
+// ANIMATION LOOP — halo pulse on hover + glow slider application
+// =============================================================
+function tickAnim(now) {
+  const t = now / 1000;
+  const pulse = 1 + Math.sin(t * 4) * 0.14;
+  const glowMult = cfg.glow / 80;
+  Graph.scene().traverse(obj => {
+    if (!obj.isSprite) return;
+    const role = obj.userData && obj.userData.__role;
+    if (role !== 'halo' && role !== 'core' && role !== 'flare') return;
+    const parent = obj.parent;
+    const nodeId = parent && parent.userData && parent.userData.__nodeId;
+    const isHovered = (nodeId != null) && (nodeId === hoveredId);
+    const baseOp = obj.userData.__baseOpacity;
+    if (baseOp != null) {
+      obj.material.opacity = baseOp * glowMult * (isHovered ? pulse : 1);
+    }
+    if (role === 'halo' && obj.userData.__baseScale != null) {
+      const bs = obj.userData.__baseScale;
+      const s = bs * (isHovered ? pulse : 1);
+      obj.scale.set(s, s, 1);
+    }
+  });
+  tickWind();
+  requestAnimationFrame(tickAnim);
+}
+requestAnimationFrame(tickAnim);
+
+// =============================================================
+// SLIDERS
+// =============================================================
+const bind = (id, valId, setter) => {
+  const input = document.getElementById(id);
+  const val = document.getElementById(valId);
+  val.textContent = input.value;
+  input.addEventListener('input', () => {
+    val.textContent = input.value;
+    setter(+input.value);
+    saveSettings();
+  });
+};
+bind('r-size', 'v-size', (v) => {
+  cfg.size = v;
+  Graph.nodeVal(n => Math.max(1, (n.mass || 4) * v / 50));
+  Graph.nodeThreeObject(makeNodeMesh);
+  Graph.refresh();
+});
+bind('r-res', 'v-res', (v) => {
+  cfg.res = v;
+  rebuildGeos(v);
+  Graph.nodeThreeObject(makeNodeMesh);
+  Graph.refresh();
+});
+bind('r-glow', 'v-glow', (v) => { cfg.glow = v; updateNebulaGlow(); /* halos applied in tick */ });
+bind('r-charge', 'v-charge', (v) => {
+  cfg.charge = v;
+  Graph.d3Force('charge').strength(-v);
+  Graph.d3ReheatSimulation();
+});
+bind('r-dist', 'v-dist', (v) => {
+  cfg.dist = v;
+  Graph.d3Force('link').distance(linkDistFor);
+  Graph.d3ReheatSimulation();
+});
+bind('r-gravity', 'v-gravity', (v) => {
+  cfg.gravity = v;
+  domainGravity.strength(v / 1000);
+  Graph.d3ReheatSimulation();
+});
+bind('r-linko', 'v-linko', (v) => {
+  cfg.linkOpacity = v;
+  Graph.scene().traverse(obj => {
+    const link = obj.userData && obj.userData.__linkRef;
+    if (link && obj.material) {
+      obj.material.opacity = linkOpacityFor(link);
+      obj.material.needsUpdate = true;
+    }
+  });
+});
+bind('r-strsens', 'v-strsens', (v) => {
+  cfg.strSens = v;
+  Graph.d3Force('link').distance(linkDistFor).strength(linkForceStrFor);
+  Graph.scene().traverse(obj => {
+    const link = obj.userData && obj.userData.__linkRef;
+    if (link && obj.material) {
+      obj.material.opacity = linkOpacityFor(link);
+      if (obj.userData.__linkMode === 'line2') {
+        obj.material.linewidth = linkWidthFor(link);
+      }
+      obj.material.needsUpdate = true;
+    }
+  });
+  Graph.d3ReheatSimulation();
+});
+
+bind('r-edgethick', 'v-edgethick', (v) => {
+  cfg.edgeThick = v;
+  Graph.scene().traverse(obj => {
+    const link = obj.userData && obj.userData.__linkRef;
+    if (link && obj.material && obj.userData.__linkMode === 'line2') {
+      obj.material.linewidth = linkWidthFor(link);
+      obj.material.needsUpdate = true;
+    }
+  });
+});
+
+bind('r-wind', 'v-wind', (v) => {
+  cfg.wind = v;
+  updateWindVisibility();
+});
+
+document.getElementById('cb-nebula').addEventListener('change', (ev) => {
+  nebulaEnabled = ev.target.checked;
+  if (!nebulaEnabled) clearNebulae();
+  else if (window.__domainCenters) renderNebulae(window.__domainCenters);
+  saveSettings();
+});
+
+bind('r-minconf', 'v-minconf', (v) => {
+  cfg.minConfidence = v;
+  applyFilter();
+});
+
+// Apply any restored slider values by firing their handlers once.
+for (const id of Object.keys(SETTINGS_SLIDERS)) {
+  const el = document.getElementById(id);
+  if (el) el.dispatchEvent(new Event('input'));
+}
+
+// =============================================================
+// SEARCH — live filter by node name
+// =============================================================
+const searchInput = document.getElementById('search-input');
+const searchResults = document.getElementById('search-results');
+const SEARCH_MAX_RESULTS = 20;
+
+function runSearch(q) {
+  q = q.trim().toLowerCase();
+  if (!q) { searchResults.innerHTML = ''; return; }
+  const hits = [];
+  for (const n of allNodes) {
+    const name = (n.name || '').toLowerCase();
+    if (name.includes(q)) hits.push(n);
+    if (hits.length >= SEARCH_MAX_RESULTS * 2) break;
+  }
+  hits.sort((a, b) => {
+    const an = (a.name || '').toLowerCase();
+    const bn = (b.name || '').toLowerCase();
+    // Prefix matches first, then by confidence desc, then by name
+    const ap = an.startsWith(q) ? 0 : 1;
+    const bp = bn.startsWith(q) ? 0 : 1;
+    if (ap !== bp) return ap - bp;
+    const ac = a.confidence || 0, bc = b.confidence || 0;
+    if (bc !== ac) return bc - ac;
+    return an.localeCompare(bn);
+  });
+  const top = hits.slice(0, SEARCH_MAX_RESULTS);
+  if (!top.length) {
+    searchResults.innerHTML = `<div class="s-search-empty">Ничего не найдено</div>`;
+    return;
+  }
+  searchResults.innerHTML = top.map(n => {
+    const color = typeColor[n.type] || typeColor.default;
+    return `
+      <div class="r-row" data-node-id="${n.id}">
+        <span class="r-swatch" style="background:${color};color:${color}"></span>
+        <span class="r-name" title="${escapeHtml(n.name)}">${escapeHtml(n.name)}</span>
+        <span class="r-meta">${escapeHtml(n.type || '')} · c${n.confidence ?? '—'}</span>
+      </div>`;
+  }).join('');
+  searchResults.querySelectorAll('.r-row').forEach(row => {
+    row.addEventListener('click', () => {
+      const id = +row.dataset.nodeId;
+      const node = nodeById.get(id);
+      if (!node) return;
+      if ((node.confidence || 1) < cfg.minConfidence) {
+        cfg.minConfidence = 1;
+        const slider = document.getElementById('r-minconf');
+        slider.value = 1;
+        document.getElementById('v-minconf').textContent = '1';
+        applyFilter();
+      }
+      if (!cfg.visibleTypes.has(node.type)) {
+        cfg.visibleTypes.add(node.type);
+        const cb = document.querySelector(`#type-filter input[data-type="${CSS.escape(node.type)}"]`);
+        if (cb) cb.checked = true;
+        applyFilter();
+      }
+      flashNode(id);
+      selectNode(node);
+    });
+  });
+}
+
+let searchDebounce = null;
+searchInput.addEventListener('input', () => {
+  clearTimeout(searchDebounce);
+  searchDebounce = setTimeout(() => runSearch(searchInput.value), 80);
+});
+searchInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') { searchInput.value = ''; runSearch(''); searchInput.blur(); }
+  if (e.key === 'Enter') {
+    const first = searchResults.querySelector('.r-row');
+    if (first) first.click();
+  }
+});
+
+document.getElementById('btn-zoom-fit').addEventListener('click', () => {
+  selectedId = null;
+  hideInfo();
+  Graph.refresh();
+  Graph.zoomToFit(800, 80);
+});
+
+document.getElementById('settings-toggle').addEventListener('click', () => {
+  const body = document.getElementById('settings-body');
+  const toggle = document.getElementById('settings-toggle');
+  body.classList.toggle('collapsed');
+  toggle.textContent = body.classList.contains('collapsed') ? '+' : '_';
+});
+
+// Apply initial filter state (confidence/type) after graph data is set.
+applyFilter();
+
+// Keep MeshLine resolution in sync with viewport
+window.addEventListener('resize', () => {
+  const w = window.innerWidth, h = window.innerHeight;
+  Graph.scene().traverse(obj => {
+    if (obj.userData && obj.userData.__linkMode === 'meshline' && obj.material.resolution) {
+      obj.material.resolution.set(w, h);
+    }
+  });
+});
+</script>
+</body>
+</html>
